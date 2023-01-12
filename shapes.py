@@ -171,7 +171,7 @@ def drawWFSetList(WFSetList,gridSize=200):
             plt.plot([point[0],point[0]+vec[0]],[point[1],point[1]+vec[1]],color='black',linewidth=0.3)
     plt.xlim(-1,1)
     plt.ylim(-1,1)
-    plt.savefig('file.png',dpi=300)
+    plt.savefig('images/file.png',dpi=300)
     plt.show()
 
 poly = generatePolygon(5)
