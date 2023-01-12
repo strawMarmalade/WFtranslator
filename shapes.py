@@ -12,16 +12,17 @@ def generateEllipse(smallestSize=10e-5, offCenter=True):
     b = np.random.uniform(smallestSize/2, maxB-smallestSize)
     return (a,b,x0,y0)
 
-def drawEllipse(a,b,x0,y0,stepSize=1000):
+def drawEllipse(a,b,x0,y0,stepSize=1000,output=True):
     x = np.linspace(-a, a, stepSize)
     yPlus = [b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
     yMinus = [-b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
     xnew = [x0+val for val in x]
     plt.plot(xnew,yPlus)
     plt.plot(xnew,yMinus)
-    plt.xlim(-1,1)
-    plt.ylim(-1,1)
-    plt.show()
+    if output:
+        plt.xlim(-1,1)
+        plt.ylim(-1,1)
+        plt.show()
     
 #ell = generateEllipse()
 #drawEllipse(ell[0], ell[1], ell[2], ell[3], 200)
@@ -99,6 +100,22 @@ def pointToGridIndex(x,y,gridSize):
 def gridIndexToPoint(x,y,gridSize):
     return [2/(gridSize-1)*x-1,2/(gridSize-1)*y-1]
 
+def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360):
+    a, b, x0, y0 = ell
+    x = np.linspace(-a+1e-3, a-1e-3, gridSize*2)
+    yPlus = [b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
+    yMinus = [-b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
+    anglesPlus = [np.round((np.arctan2(1,2*b*(a**(-2))*val/(np.sqrt(1-(val/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for val in x]
+    anglesMinus = [np.round((np.arctan2(-1,2*b*(a**(-2))*val/(np.sqrt(1-(val/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for val in x]
+    xnew = [x0+val for val in x]
+
+    pairs1 = [[pointToGridIndex(xnew[val],yPlus[val],gridSize),[anglesPlus[val]]] for val in range(len(x))]
+    pairs1.extend([[pointToGridIndex(xnew[val],yMinus[val],gridSize),[anglesMinus[val]]] for val in range(len(x))])
+    
+    return pairs1
+
+
+
 def polygonToWFsetGrid(poly, gridSize=200, angleAccuracy=360):
     #WFSetGrid = np.zeros(gridSize,gridSize,angleAccuracy)
     WFSetList = []
@@ -159,7 +176,6 @@ def polygonToWFsetGrid(poly, gridSize=200, angleAccuracy=360):
     return WFSetList
              
 
-
 def drawWFSetList(WFSetList,gridSize=200):
     for val in range(len(WFSetList)):
         pointGrid = WFSetList[val][0]
@@ -171,14 +187,19 @@ def drawWFSetList(WFSetList,gridSize=200):
             plt.plot([point[0],point[0]+vec[0]],[point[1],point[1]+vec[1]],color='black',linewidth=0.3)
     plt.xlim(-1,1)
     plt.ylim(-1,1)
-    plt.savefig('images/file.png',dpi=300)
+    plt.savefig('file.png',dpi=300)
     plt.show()
 
-poly = generatePolygon(5)
-drawPolygon(poly, output=False)
-List = polygonToWFsetGrid(poly)
+#poly = generatePolygon(5)
+#drawPolygon(poly, output=False)
+#List = polygonToWFsetGrid(poly)
+#drawWFSetList(List)
+
+ell = generateEllipse()
+drawEllipse(ell[0],ell[1],ell[2],ell[3], output=False)
+List = ellipseToWFsetList(ell)
 drawWFSetList(List)
-    
+
          
          
     
