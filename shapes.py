@@ -1,12 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import math
 import warnings
 import time
-
-import torch
-
-
 
 def generateEllipse(smallestSize=10e-5, midRad=0.1, offCenter=True):
     maxA = 1.0; maxB = 1.0
@@ -297,7 +292,6 @@ def gridOfAllPointsInTriangle(xs, gridSize=200, angleAccuracy=360):
             
     return grid
 
-
 def gridOfAllPointsInPolygon(poly, gridSize=200, angleAccuracy=360):
     grid = np.zeros([gridSize,gridSize],dtype=int)
     #as the first and last element in the list poly is the same starting point, we leave it away
@@ -335,7 +329,6 @@ def drawGrid(grid):
     plt.imshow(grid, origin='lower') 
     plt.show()
 
-
 def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     print(f"Polygon is of size {polySize:d} and grid size is {gridSize:d}")
     
@@ -363,19 +356,16 @@ def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     # print(f"Get inside of polygon as grid old way took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    grid2 = gridOfAllPointsInPolygon(poly, gridSize=gridSize, angleAccuracy=angleAccuracy)
+    grid = gridOfAllPointsInPolygon(poly, gridSize=gridSize, angleAccuracy=angleAccuracy)
     toc = time.perf_counter()
     print(f"Get inside of polygon way as grid took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    #drawGrid(grid1)
-    drawGrid(grid2)
-    #drawGrid(np.logical_xor(grid1,grid2))
+    drawGrid(grid)
     toc = time.perf_counter()
     print(f"Drawing the grid of polygon took {toc - tic:0.4f} seconds\n")
-    
 
-def fullEllipseRoutineTimer(gridSize = 200):   
+def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):   
     print(f"Grid size is {gridSize:d}")
 
     tic = time.perf_counter()
@@ -384,7 +374,7 @@ def fullEllipseRoutineTimer(gridSize = 200):
     print(f"Ellipse generation took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    WFSetList = ellipseToWFsetList(ell)
+    WFSetList = ellipseToWFsetList(ell, gridSize=gridSize, angleAccuracy=angleAccuracy)
     toc = time.perf_counter()
     print(f"Wavefrontset calculation took {toc - tic:0.4f} seconds")
 
@@ -404,21 +394,50 @@ def fullEllipseRoutineTimer(gridSize = 200):
     toc = time.perf_counter()
     print(f"Drawing the grid of polygon took {toc - tic:0.4f} seconds\n")
 
-fullPolygonRoutineTimer(polySize=5)
-fullEllipseRoutineTimer()
+#fullPolygonRoutineTimer(polySize=5)
+#fullEllipseRoutineTimer()
 
+def toAngAcc(angle,angleAccuracy=360):
+    return int(angle/2/np.pi * angleAccuracy)%angleAccuracy
 
-#ell = generateEllipse()
-#drawEllipse(ell, output=True)
-#drawPolygon(poly, output=False)
-# grid = constructImageInGridOfPolygon(poly)
-# #print(List)
-# drawGrid(grid)
+def fromAngAcc(deg,angleAccuracy=360):
+    return deg/angleAccuracy*2*np.pi
 
-#print(checkIfPointInEllipse(p, ell))
+def radonTrafo(grid,gridSize=200, angleAccuracy=360):
+    radonValue = np.zeros([gridSize,gridSize,int(angleAccuracy/2)])
+    for angleIndexAdd in range(angleAccuracy):
+        print(angleIndexAdd)
+        angle = 2*np.pi*(angleAccuracy+angleIndexAdd)
+        pointOnOuterCircle = np.array([2*np.cos(angle),2*np.sin(angle)])
+        #now the inward angle is angle+pi
+        innerNormal = angle+np.pi
+        normalDeg = toAngAcc(innerNormal,angleAccuracy)
+        for angleOffset in range(-int(angleAccuracy/4),int(angleAccuracy/4)):
+            walkAngleDeg = normalDeg+angleOffset
+            walkAngle = fromAngAcc(walkAngleDeg,angleAccuracy)
+            steps = int(gridSize*3)
+            walkVector = np.array([2/steps*np.cos(walkAngle),2/steps*np.sin(walkAngle)])
+            #currentSpot = pointOnOuterCircle
+            currentSpotAsGrid = pointToGridIndex(pointOnOuterCircle[0], pointOnOuterCircle[1], gridSize)
+            for k in range(steps+1):
+                newSpot = gridIndexToPoint(currentSpotAsGrid[0], currentSpotAsGrid[1], gridSize) + walkVector
+                newSpotAsGrid = pointToGridIndex(newSpot[0],newSpot[1], gridSize)
+                if newSpotAsGrid[0] <= 199 and newSpotAsGrid[1] <= 199 and grid[newSpotAsGrid[0],newSpotAsGrid[1]] and newSpotAsGrid != currentSpotAsGrid:
+                    radonValue[newSpotAsGrid[0],newSpotAsGrid[1],walkAngleDeg] += 1
+                currentSpotAsGrid = newSpotAsGrid
+    return radonValue
+
+ell = generateEllipse()
+drawEllipse(ell, output=False)
+grid = constructImageInGridOfEllipse(ell)
+
+print(radonTrafo(grid))
+
 
 
 ### Leo stuff
+import math
+import torch
 # N = 201
 
 # ImageWF = convertWFListToWFGridLeoConvetion(List, gridSize=201)
