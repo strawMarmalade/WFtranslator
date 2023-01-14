@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings
+import io
 import time
 
 def generateEllipse(smallestSize=10e-5, midRad=0.1, offCenter=True):
@@ -670,9 +671,9 @@ def polyGrid3(poly, gridSize=200):
 
 
 
-# poly = generatePolygon(2)
+poly = generatePolygon(3)
 
-# drawPolygon(poly, output=True)
+drawPolygon(poly, output=True)
 
 # tic = time.perf_counter()
 # grid1 = polyGrid1(poly)
@@ -694,12 +695,32 @@ def polyGrid3(poly, gridSize=200):
 # grid5 = gridOfAllPointsInPolygon2(poly, gridSize=200, angleAccuracy=360)
 # toc = time.perf_counter()
 # print(f"Old new way took {toc - tic:0.4f} seconds\n")
+# tic = time.perf_counter()
+# fig = plt.figure(figsize=(2,2), dpi=100, frameon=False)
+# plt.xlim(-1,1)
+# plt.ylim(-1,1)
+# plt.axis('off')
+# plt.fill(poly[:,0],poly[:,1], "black")
+# io_buf = io.BytesIO()
+# fig.savefig(io_buf,format='raw', dpi=100)
+# io_buf.seek(0)
+# grid = np.reshape(np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
+#                       newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1))[:,:,0] < 255
+# grid = np.transpose([np.flip(grid[:,val]) for val in range(200)])
+# io_buf.close()
+# plt.close(fig)
+# plt.imshow(grid, origin='lower')
+# toc = time.perf_counter()
+# print(f"Matplotlib took {toc - tic:0.4f} seconds\n")
 
-# drawGrid(grid1)
+
+#drawGrid(grid)
 # drawGrid(grid2)
 # drawGrid(grid3)
 # drawGrid(grid4)
 # drawGrid(grid5)
+
+
 
 
 nums = 20
@@ -708,8 +729,9 @@ way2 = 0.0
 way3 = 0.0
 way4 = 0.0
 way5 = 0.0
+way6 = 0.0
 for k in range(nums):
-    poly = generatePolygon(5)
+    poly = generatePolygon(7)
     tic = time.perf_counter()
     grid1 = polyGrid1(poly)
     toc = time.perf_counter()
@@ -735,15 +757,40 @@ for k in range(nums):
     toc = time.perf_counter()
     way5 += toc - tic
     print(f"Old new way took {toc - tic:0.4f} seconds\n")
+    tic = time.perf_counter()
+    fig = plt.figure(figsize=(2,2), dpi=100, frameon=False)
+    plt.xlim(-1,1)
+    plt.ylim(-1,1)
+    plt.axis('off')
+    plt.fill(poly[:,0],poly[:,1], "black")
+    io_buf = io.BytesIO()
+    fig.savefig(io_buf,format='raw', dpi=100)
+    io_buf.seek(0)
+    grid6 = np.reshape(np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
+                          newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1))[:,:,0] < 255
+    io_buf.close()
+    grid6 = np.transpose([np.flip(grid6[:,val]) for val in range(200)])
+    plt.close(fig)
+    toc = time.perf_counter()
+    way6 += toc - tic
+    print(f"Pyplot took {toc - tic:0.4f} seconds\n")
 
 way1 /= nums
 way2 /= nums
 way3 /= nums
 way4 /= nums
 way5 /= nums
+way6 /= nums
 
 
-print(f"Way 1: {way1:0.4f}\nWay 2: {way2:0.4f}\nWay 3: {way3:0.4f}\nWay 4: {way4:0.4f}\nWay 5: {way5:0.4f}")
+print(f"Way 1: {way1:0.4f}\nWay 2: {way2:0.4f}\nWay 3: {way3:0.4f}\nWay 4: {way4:0.4f}\nWay 5: {way5:0.4f}\nWay 6: {way6:0.4f}")
+
+# Way 1: 2.7858
+# Way 2: 1.9747
+# Way 3: 2.0195
+# Way 4: 0.5225
+# Way 5: 0.4775
+# Way 6: 0.0105
 
 #so way 4 is the way to go
 # Way 1: 0.8512
