@@ -3,30 +3,96 @@ import matplotlib.pyplot as plt
 import warnings
 import io
 import time
+from matplotlib.patches import Ellipse
 
-def generateEllipse(smallestSize=10e-5, midRad=0.1, offCenter=True):
-    maxA = 1.0; maxB = 1.0
-    x0 = 0; y0 = 0
-    if offCenter:
-        (x0,y0) =  np.random.uniform(-1+midRad+smallestSize, 1-smallestSize-midRad, 2)
-        maxA = np.min([1-x0,1+x0])
-        maxB = np.min([1-y0,1+y0])
-    a = np.random.uniform(np.min([midRad,smallestSize/2]), maxA-smallestSize)
-    b = np.random.uniform(np.min([midRad,smallestSize/2]), maxB-smallestSize)
-    return (a,b,x0,y0)
+"""
+For a given gridSize (default 200),
+we define the grid of points by
+[-1  + 2/(gridSize-1)[n1 
+ -1]    n2]                 
 
-def drawEllipse(ell,stepSize=1000,output=True):
-    a,b,x0,y0 = ell
-    x = np.linspace(-a, a, stepSize)
-    yPlus = [b*np.sqrt(1-(val/a)**2)+y0 for val in x]
-    yMinus = [-b*np.sqrt(1-(val/a)**2)+y0 for val in x]
-    xnew = [x0+val for val in x]
-    plt.plot(xnew,yPlus)
-    plt.plot(xnew,yMinus)
-    if output:
-        plt.xlim(-1,1)
-        plt.ylim(-1,1)
-        plt.show()
+so that the index [n1,n2] is the point on the grid
+"""    
+
+def point2grid(p,gridSize=200):
+    return np.round((p+np.array([1,1]))*(gridSize-1)/2).astype(int)
+
+def grid2point(p,gridSize=200):
+    return np.array([-1,-1]+2/(gridSize-1)*p)
+        
+def rot(theta):
+    return np.array([[np.cos(theta), -np.sin(theta)], 
+                         [np.sin(theta),  np.cos(theta)]])
+
+def genEll():
+    angle = np.random.uniform(-1,1)*np.pi/4
+    
+    maxlen = np.sqrt(1+(np.tan(angle))**2)
+    a = np.random.uniform(0,maxlen)
+    
+    maxb1 = np.sqrt((1-(a*np.cos(angle))**2)/(np.sin(angle)**2))
+    maxb2 = np.sqrt((1-(a*np.sin(angle))**2)/(np.cos(angle)**2))
+    
+    maxb = np.min([maxb1,maxb2])
+
+    b = np.random.uniform(0,maxb)
+    
+    #these are the maximal distances to border
+    maxX = 1-np.sqrt((a*np.cos(angle))**2+(b*np.sin(angle))**2)
+    maxY = 1-np.sqrt((a*np.sin(angle))**2+(b*np.cos(angle))**2)
+        
+    centerX = np.random.uniform(-maxX,maxX)
+    centerY = np.random.uniform(-maxY,maxY)
+    
+    center = np.array([centerX,centerY])
+    return Ellipse(center, 2*a,2*b, angle=np.rad2deg(angle))
+
+
+# fig = plt.figure(figsize=(1,1), dpi=200, frameon=False)
+# plt.xlim(-1,1)
+# plt.ylim(-1,1)
+# plt.axis('off')
+# fig.add_artist(e)
+# plt.show()
+
+def gridEll(ell, gridSize=200):
+    fig = plt.figure(figsize=(1,1), dpi=gridSize, frameon=False)
+    ax = fig.add_axes([0,0,1,1])
+    ax.add_artist(ell)
+    plt.xlim(-1,1)
+    plt.ylim(-1,1)
+    plt.axis('off')
+    io_buf = io.BytesIO()
+    fig.savefig(io_buf,format='raw', dpi=gridSize)
+    io_buf.seek(0)
+    grid = np.reshape(np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
+                          newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1))[:,:,0] < 255
+    io_buf.close()
+    plt.close(fig)
+    return grid
+
+def plotEll(ell, stepSize=200, output=True):
+    fig, ax = plt.subplots(subplot_kw={'aspect': 'equal'})
+    plt.xlim(-1,1)
+    plt.ylim(-1,1)
+    ax.add_artist(ell)
+    plt.show()
+    
+
+
+#maybe wont work, i dunno
+def checkIfPointInEllipse(p, ell):
+    center, angle, a, b = ell
+    pRotatedBack = rot(-angle)@(p-center)
+    if -a <= pRotatedBack[0] <= a:
+        if -b*np.sqrt(1-((pRotatedBack[0]/a))**2) <= pRotatedBack[1] <= b*np.sqrt(1-((pRotatedBack[0]/a))**2):
+            return True
+    return False
+
+
+def drawGrid(grid):
+    plt.imshow(grid, origin='lower') 
+    plt.show()
 
 def generatePolygon(pointNum, smallestSize=10e-5, niceness=0.1, minRad=0.1, offCenter=True):
     """
@@ -98,22 +164,41 @@ def pointToGridIndex(x,y,gridSize):
 def gridIndexToPoint(x,y,gridSize):
     return np.array([2/(gridSize-1)*x-1,2/(gridSize-1)*y-1])
 
+np.random.seed(70)
+
 def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360):
-    a, b, x0, y0 = ell
-    x = np.linspace(-a, a, gridSize*2,endpoint=True)
-    yPlus = [b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
-    yMinus = [-b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
+    a = ell.get_width()/2
+    b = ell.get_height()/2
+    x0,y0 = ell.get_center()
+    angle = np.deg2rad(ell.get_angle())
+    t = np.linspace(0, 2*np.pi, angleAccuracy)
+    Ell = np.array([a*np.cos(t), b*np.sin(t)])  
+    
+    r = rot(angle)
+    #2-D rotation matrix
+
+    Ell_rot = np.zeros((2,Ell.shape[1]))
+    for i in range(Ell.shape[1]):
+        Ell_rot[:,i] = r@Ell[:,i]
+    # plt.xlim(-1,1)
+    # plt.ylim(-1,1)
+    # plt.plot(x0+Ell_rot[0,:] , y0+Ell_rot[1,:],'darkorange' )    #rotated ellipse
+    # plt.show()
+    WFSetList = [[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[np.round((angle+np.arctan2(1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy]] for j in range(angleAccuracy)]
+    # x = np.linspace(-a, a, gridSize*2,endpoint=True)
+    # yPlus = [b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
+    # yMinus = [-b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
     #we allow the below things to divide by zero because
     #arctan2 can handle when one of the parameters is infinity
     #but I dont want to have to see the warnings so I supress them
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        anglesPlus = [np.round((np.arctan2(1,2*b*(a**(-2))*val/(np.sqrt(1-(val/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for val in x]
-        anglesMinus = [np.round((np.arctan2(-1,2*b*(a**(-2))*val/(np.sqrt(1-(val/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for val in x]
-    xnew = [x0+val for val in x]
+    # with warnings.catch_warnings():
+    #     warnings.simplefilter("ignore")
+    #     anglesPlus = [np.round((np.arctan2(1,2*b*(a**(-2))*val/(np.sqrt(1-(val/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for val in x]
+    #     anglesMinus = [np.round((np.arctan2(-1,2*b*(a**(-2))*val/(np.sqrt(1-(val/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for val in x]
+    # xnew = [x0+val for val in x]
 
-    WFSetList = [[pointToGridIndex(xnew[val],yPlus[val],gridSize),[anglesPlus[val]]] for val in range(len(x))]
-    WFSetList.extend([[pointToGridIndex(xnew[val],yMinus[val],gridSize),[anglesMinus[val]]] for val in range(len(x))])
+    # WFSetList = [[pointToGridIndex(xnew[val],yPlus[val],gridSize),[anglesPlus[val]]] for val in range(len(x))]
+    # WFSetList.extend([[pointToGridIndex(xnew[val],yMinus[val],gridSize),[anglesMinus[val]]] for val in range(len(x))])
     
     return WFSetList
 
@@ -146,14 +231,14 @@ def polygonToWFsetList(poly, gridSize=200, angleAccuracy=360):
         interPoints = interPoints.astype(int)
         for k in range(interPoints+1):
             stepTaken = poly[val]+k/interPoints*(poly[val+1]-poly[val])
-            stepTakenAsGrid = pointToGridIndex(stepTaken[0], stepTaken[1], gridSize)
+            stepTakenAsGrid = np.array(pointToGridIndex(stepTaken[0], stepTaken[1], gridSize))
            # WFSetGrid[stepTakenAsGrid[0]][stepTakenAsGrid[1]][outwardWFEndAngle] = 1
             WFSetList.append([stepTakenAsGrid,[outwardWFEndAngle]])
         #the following list will be filled with every angle between the two outward pointing
         #angles from above which is the set of outward wavefront directions for a corner point
         #of a polygon     
         
-        pointAsGrid = pointToGridIndex(poly[val][0],poly[val][1],gridSize)
+        pointAsGrid = np.array(pointToGridIndex(poly[val][0],poly[val][1],gridSize))
         
         towardAngleBackward = (int(angleAccuracy/2)+np.round((towardAngle)*angleAccuracy/(2*np.pi)).astype(int))%angleAccuracy
         awayAngleDegrees = np.round((awayAngle)*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy
@@ -171,7 +256,7 @@ def polygonToWFsetList(poly, gridSize=200, angleAccuracy=360):
 def drawWFSetList(WFSetList,gridSize=200, saveFile=True):
     for val in range(len(WFSetList)):
         pointGrid = WFSetList[val][0]
-        point = gridIndexToPoint(pointGrid[0], pointGrid[1], gridSize)
+        point = grid2point(pointGrid,gridSize)
         angles = WFSetList[val][1]
         for angle in angles:
             #to plot the WFset we just make small lines in the correct direction
@@ -193,75 +278,40 @@ def convertWFListToWFGridLeoConvetion(List, gridSize=200, angleAccuracy=360):
         WFSetGrid[point[0],point[1], angleListHalf] = 1
     return WFSetGrid
 
-def checkIfPointInTriangle(p, xs):
-    #give xs as 4 points where xs[0]=xs[3] 
-    #so that its easier to do
-    for val in range(3):
-        #line from x0 to x1 is (1-t)x0+tx1
-        #shifting the origin we get the vector v=(x1-x0)
-        v = xs[val+1]-xs[val]
-        #ortho. proj. of point p onto (1-t)x0+tx1 is
-        orthP = np.outer(v, v)@(p-xs[val+1])/np.dot(v,v) + xs[val+1]
-        #outer normal vector along that line is
-        vNormal = np.arctan2(v[1],v[0]) - np.pi/2
-        #distance between original point p and its orth projection is
-        dist = np.linalg.norm(p-orthP)
-        #this vector points away from p if p is inside the triangle and 
-        #points toward p if p is outside of the triangle
-        normalAsVec = [dist/2*np.cos(vNormal), dist/2*np.sin(vNormal)]
-        #so start at orthP, walk the outer normal, and check if you've gotten closer to 
-        #p than you were before. If so, p is outside of the triangle
-        if np.linalg.norm((orthP+normalAsVec)-p) < dist:
-            return False
-    return True
-    
-def checkIfPointIsInPolygon(p, poly):
+def newCheckIfInTriangle(p,xs):
+    a = 1/2 * (-xs[1,1] * xs[2,0] + xs[0,1] * (-xs[1,0] + xs[2,0]) + xs[0,0] * (xs[1,1] - xs[2,1]) + xs[1,0] * xs[2,1])
+    s = (xs[0,1]*xs[2,0] - xs[0,0]*xs[2,1] + (xs[2,1] - xs[0,1])*p[0] + (xs[0,0] - xs[2,0])*p[1])
+    t = (xs[0,0]*xs[1,1] - xs[0,1]*xs[1,0] + (xs[0,1] - xs[1,1])*p[0] + (xs[1,0] - xs[0,0])*p[1])
+
+    return s > 0 and t > 0 and (s + t) < 2 * a
+
+def checkIfPointIsInPolygonNew2(p, poly):
     #as the first and last element in the list poly is the same starting point, we leave it away
     for index in range(1,len(poly)-2):
+        xs = np.array([poly[0],poly[index],poly[index+1],poly[0]])
+        if np.min(xs[:,0]) <= p[0] <= np.max(xs[:,0]) and np.min(xs[:,1]) <= p[1] <= np.max(xs[:,1]):
         #the only polgons we can construct are star-convex so we just have to check for
         #all the triangles that make up the polygon
-        if checkIfPointInTriangle(p, [poly[0],poly[index],poly[index+1],poly[0]]):
-            return True
+            if newCheckIfInTriangle(p, xs):
+                return True
     return False
 
+def gridFromPolygon(poly,gridSize=200):
+    dpi = int(gridSize/2)
+    fig = plt.figure(figsize=(2,2), dpi=dpi, frameon=False)
+    plt.xlim(-1,1)
+    plt.ylim(-1,1)
+    plt.axis('off')
+    plt.fill(poly[:,0],poly[:,1], "black")
+    io_buf = io.BytesIO()
+    fig.savefig(io_buf,format='raw', dpi=dpi)
+    io_buf.seek(0)
+    grid6 = np.reshape(np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
+                          newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1))[:,:,0] < 255
+    io_buf.close()
+    plt.close(fig)
+    return np.transpose([np.flip(grid6[:,val]) for val in range(gridSize)])
 
-
-def gridOfAllPointsInPolygon(poly, gridSize=200, angleAccuracy=360):
-    grid = np.zeros([gridSize,gridSize],dtype=int)
-    #as the first and last element in the list poly is the same starting point, we leave it away
-    for index in range(1,len(poly)-2):
-        #the only polgons we can construct are star-convex so we just have to check for
-        #all the triangles that make up the polygon
-        grid = np.logical_or(grid, gridOfAllPointsInTriangle([poly[0],poly[index],poly[index+1],poly[0]],gridSize=gridSize,angleAccuracy=angleAccuracy))
-        #if checkIfPointInTriangle(p, [poly[0],poly[index],poly[index+1],poly[0]]):
-    return grid > 0
-
-def checkIfPointInEllipse(p, ell):
-    a, b, x0, y0 = ell
-    if -a <= p[0]-x0 <= a:
-        if -b*np.sqrt(1-((p[0]-x0)/a)**2)+y0 <= p[1] <= b*np.sqrt(1-((p[0]-x0)/a)**2)+y0:
-            return True
-    return False
-
-def constructImageInGridOfEllipse(ell, gridSize=200):
-    return np.array([[checkIfPointInEllipse(gridIndexToPoint(j,k, gridSize),ell) for j in range(gridSize)] for k in range(gridSize)], dtype=bool)
-
-def constructImageInListOfEllipse(ell, gridSize=200):
-    listOfPoints = []
-    for k in range(gridSize):
-        for j in range(gridSize):
-            #this is point in the 'real' coordinates
-            point = gridIndexToPoint(k,j, gridSize)
-            if checkIfPointInEllipse(point,ell):
-                listOfPoints.append(point)
-    return listOfPoints
-
-def constructImageInGridOfPolygon(poly, gridSize=200):
-    return np.array([[checkIfPointIsInPolygon(gridIndexToPoint(j,k, gridSize),poly) for j in range(gridSize)] for k in range(gridSize)], dtype=bool)
-
-def drawGrid(grid):
-    plt.imshow(grid, origin='lower') 
-    plt.show()
 
 def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     print(f"Polygon is of size {polySize:d} and grid size is {gridSize:d}")
@@ -290,7 +340,7 @@ def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     # print(f"Get inside of polygon as grid old way took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    grid = gridOfAllPointsInPolygon(poly, gridSize=gridSize, angleAccuracy=angleAccuracy)
+    grid = gridFromPolygon(poly, gridSize=gridSize)
     toc = time.perf_counter()
     print(f"Get inside of polygon way as grid took {toc - tic:0.4f} seconds")
 
@@ -303,7 +353,7 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     print(f"Grid size is {gridSize:d}")
 
     tic = time.perf_counter()
-    ell = generateEllipse()
+    ell = genEll()
     toc = time.perf_counter()
     print(f"Ellipse generation took {toc - tic:0.4f} seconds")
 
@@ -313,53 +363,25 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     print(f"Wavefrontset calculation took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    drawEllipse(ell, output=False)
+    #plotEll(ell, output=False)
     drawWFSetList(WFSetList, gridSize=gridSize, saveFile=False)
     toc = time.perf_counter()
     print(f"Plotting ellipse with wavefrontset picture took {toc - tic:0.4f} seconds")
     
     tic = time.perf_counter()
-    grid = constructImageInGridOfEllipse(ell, gridSize=gridSize)
+    grid = gridEll(ell, gridSize=gridSize)
     toc = time.perf_counter()
     print(f"Get inside of ellipse as grid took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    drawGrid(grid)
+    #plt.imshow(grid)
+    #plt.show()
     toc = time.perf_counter()
     print(f"Drawing the grid of polygon took {toc - tic:0.4f} seconds\n")
 
 #fullPolygonRoutineTimer(polySize=5)
-#fullEllipseRoutineTimer()
+fullEllipseRoutineTimer()
 
-def toAngAcc(angle,angleAccuracy=360):
-    return int(angle/2/np.pi * angleAccuracy)%angleAccuracy
-
-def fromAngAcc(deg,angleAccuracy=360):
-    return deg/angleAccuracy*2*np.pi
-
-def radonTrafo(grid,gridSize=200, angleAccuracy=360):
-    radonValue = np.zeros([gridSize,gridSize,int(angleAccuracy/2)])
-    for angleIndexAdd in range(angleAccuracy):
-        print(angleIndexAdd)
-        angle = 2*np.pi*(angleAccuracy+angleIndexAdd)
-        pointOnOuterCircle = np.array([2*np.cos(angle),2*np.sin(angle)])
-        #now the inward angle is angle+pi
-        innerNormal = angle+np.pi
-        normalDeg = toAngAcc(innerNormal,angleAccuracy)
-        for angleOffset in range(-int(angleAccuracy/4),int(angleAccuracy/4)):
-            walkAngleDeg = normalDeg+angleOffset
-            walkAngle = fromAngAcc(walkAngleDeg,angleAccuracy)
-            steps = int(gridSize*3)
-            walkVector = np.array([2/steps*np.cos(walkAngle),2/steps*np.sin(walkAngle)])
-            #currentSpot = pointOnOuterCircle
-            currentSpotAsGrid = pointToGridIndex(pointOnOuterCircle[0], pointOnOuterCircle[1], gridSize)
-            for k in range(steps+1):
-                newSpot = gridIndexToPoint(currentSpotAsGrid[0], currentSpotAsGrid[1], gridSize) + walkVector
-                newSpotAsGrid = pointToGridIndex(newSpot[0],newSpot[1], gridSize)
-                if newSpotAsGrid[0] <= 199 and newSpotAsGrid[1] <= 199 and grid[newSpotAsGrid[0],newSpotAsGrid[1]] and newSpotAsGrid != currentSpotAsGrid:
-                    radonValue[newSpotAsGrid[0],newSpotAsGrid[1],walkAngleDeg] += 1
-                currentSpotAsGrid = newSpotAsGrid
-    return radonValue
 
 # ell = generateEllipse()
 # drawEllipse(ell, output=False)
@@ -367,313 +389,6 @@ def radonTrafo(grid,gridSize=200, angleAccuracy=360):
 
 # print(radonTrafo(grid))
 
-
-def newCheckIfInTriangle(p,xs):
-    a = 1/2 * (-xs[1,1] * xs[2,0] + xs[0,1] * (-xs[1,0] + xs[2,0]) + xs[0,0] * (xs[1,1] - xs[2,1]) + xs[1,0] * xs[2,1])
-    s = (xs[0,1]*xs[2,0] - xs[0,0]*xs[2,1] + (xs[2,1] - xs[0,1])*p[0] + (xs[0,0] - xs[2,0])*p[1])
-    t = (xs[0,0]*xs[1,1] - xs[0,1]*xs[1,0] + (xs[0,1] - xs[1,1])*p[0] + (xs[1,0] - xs[0,0])*p[1])
-
-    return s > 0 and t > 0 and (s + t) < 2 * a
-
-def gridOfAllPointsInTriangle(xs, gridSize=200, angleAccuracy=360):
-    grid = np.zeros([gridSize,gridSize],dtype=bool)
-    #take again x3=x0
-    #lets find at least one other angle less than 90 degrees
-    towardPointLineMid = 0.5*(xs[0]-xs[-2])
-    awayPointLineMid = 0.5*(xs[1]-xs[0])
-    #arctan2 gives angle between -pi and pi 
-    towardAngle = np.arctan2(towardPointLineMid[1],towardPointLineMid[0])
-    towardAngleDegrees = np.round(towardAngle*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy
-
-    awayAngle = np.arctan2(awayPointLineMid[1],awayPointLineMid[0])
-    awayAngleDegrees = np.round((awayAngle)*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy
-
-    pointFrom = xs[0]
-    pointTo = xs[1]
-    if (towardAngleDegrees+int(angleAccuracy/2)-awayAngleDegrees)%angleAccuracy > int(angleAccuracy/4):
-        #the angle at the origin is greater than 90 so 
-        #we will use the other points for the walk
-        pointFrom = xs[1]
-        pointTo = xs[2]
-    else:
-        #we have to find the other angle with less than 90 degrees
-        towardPointLineMid = 0.5*(xs[1]-xs[0])
-        awayPointLineMid = 0.5*(xs[2]-xs[1])
-        #arctan2 gives angle between -pi and pi 
-        #towardAngle = np.arctan2(towardPointLineMid[1],towardPointLineMid[0])
-        #towardAngleDegrees = np.round(towardAngle*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy
-        
-        #weve moved to the next vertex so no need to calc again
-        towardAngleDegrees = awayAngleDegrees
-        
-        awayAngle = np.arctan2(awayPointLineMid[1],awayPointLineMid[0])
-        awayAngleDegrees = np.round((awayAngle)*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy
-
-        #if this is true then the angle from x1 to x2 is greater than 90 degrees
-        if (towardAngleDegrees+int(angleAccuracy/2)-awayAngleDegrees)%angleAccuracy > int(angleAccuracy/4):
-            #the line from x0 to x1 is unsuitable to build the grid so we use 
-            #the line from x2 to x0
-            pointFrom = xs[2]
-            pointTo = xs[0]
-            
-    awayPointLineMid = 0.5*(pointTo-pointFrom)
-
-    awayAngle = np.arctan2(awayPointLineMid[1],awayPointLineMid[0])
-    inwardNormalAwayAngle = awayAngle+np.pi/2
-    #inwardNormalAngle = (-np.round((outwardNormalAwayAngle)*angleAccuracy/(2*np.pi)).astype(int))%angleAccuracy
-
-    #we will now walk along the path from pointFrom to pointTo
-    #and walk in the direction of the inward normal and add points
-    #to the grid as long as we dont land outside of the triangle
-    distBetweenPoints = np.linalg.norm(pointFrom-pointTo)
-    interPoints = np.round((gridSize-1)*distBetweenPoints)
-    interPoints = interPoints.astype(int)
-    for k in range(interPoints+1):
-        #here we are walking along the line pointFrom to pointTo
-        stepTaken = pointFrom+k/interPoints*(pointTo-pointFrom)
-        stepTakenAsGrid = pointToGridIndex(stepTaken[0], stepTaken[1], gridSize)
-        grid[stepTakenAsGrid[1],stepTakenAsGrid[0]] = True
-        
-        #here we additionally walk along the inward normal and add points to the grid
-        stepInNormal = np.array([1/(2*gridSize)*np.cos(inwardNormalAwayAngle), 1/(2*gridSize)*np.sin(inwardNormalAwayAngle)])
-        stepAlongNormalHere = stepTaken+stepInNormal
-        while newCheckIfInTriangle(stepAlongNormalHere, np.array(xs)):
-            gridIndex = pointToGridIndex(stepAlongNormalHere[0], stepAlongNormalHere[1], gridSize)
-            grid[gridIndex[1],gridIndex[0]] = True
-            stepAlongNormalHere = stepAlongNormalHere+stepInNormal
-            
-    return grid
-
-def get_line(start, end):
-    """Bresenham's Line Algorithm
-    Produces a list of tuples from start and end
-    >>> points1 = get_line((0, 0), (3, 4))
-    >>> points2 = get_line((3, 4), (0, 0))
-    >>> assert(set(points1) == set(points2))
-    >>> print points1
-    [(0, 0), (1, 1), (1, 2), (2, 3), (3, 4)]
-    >>> print points2
-    [(3, 4), (2, 3), (1, 2), (1, 1), (0, 0)]
-    """
-    # Setup initial conditions
-    x1, y1 = start
-    x2, y2 = end
-    dx = x2 - x1
-    dy = y2 - y1
-
-    # Determine how steep the line is
-    is_steep = abs(dy) > abs(dx)
-
-    # Rotate line
-    if is_steep:
-        x1, y1 = y1, x1
-        x2, y2 = y2, x2
-
-    # Swap start and end points if necessary and store swap state
-    swapped = False
-    if x1 > x2:
-        x1, x2 = x2, x1
-        y1, y2 = y2, y1
-        swapped = True
-
-    # Recalculate differentials
-    dx = x2 - x1
-    dy = y2 - y1
-
-    # Calculate error
-    error = int(dx / 2.0)
-    ystep = 1 if y1 < y2 else -1
-
-    # Iterate over bounding box generating points between start and end
-    y = y1
-    points = []
-    for x in range(x1, x2 + 1):
-        coord = (y, x) if is_steep else (x, y)
-        points.append(coord)
-        if x != x1 and x < x2-2:
-            if ystep == 1:
-                y2 = y-2
-            else:
-                y2 = y+2
-    
-            coord2 = (y2, x) if is_steep else (x, y2)
-            points.append(coord2)
-        error -= abs(dy)
-        if error < 0:
-            y += ystep
-            error += dx
-
-    # Reverse the list if the coordinates were swapped
-    if swapped:
-        points.reverse()
-    return points
-
-
-
-def gridOfAllPointsInTriangle2(xs, gridSize=200, angleAccuracy=360):
-    grid = np.zeros([gridSize,gridSize],dtype=bool)
-    #take again x3=x0
-    #lets find at least one other angle less than 90 degrees
-    towardPointLineMid = 0.5*(xs[0]-xs[-2])
-    awayPointLineMid = 0.5*(xs[1]-xs[0])
-    #arctan2 gives angle between -pi and pi 
-    towardAngle = np.arctan2(towardPointLineMid[1],towardPointLineMid[0])
-    towardAngleDegrees = np.round(towardAngle*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy
-
-    awayAngle = np.arctan2(awayPointLineMid[1],awayPointLineMid[0])
-    awayAngleDegrees = np.round((awayAngle)*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy
-
-    pointFrom = xs[0]
-    pointTo = xs[1]
-    if (towardAngleDegrees+int(angleAccuracy/2)-awayAngleDegrees)%angleAccuracy > int(angleAccuracy/4):
-        #the angle at the origin is greater than 90 so 
-        #we will use the other points for the walk
-        pointFrom = xs[1]
-        pointTo = xs[2]
-    else:
-        #we have to find the other angle with less than 90 degrees
-        towardPointLineMid = 0.5*(xs[1]-xs[0])
-        awayPointLineMid = 0.5*(xs[2]-xs[1])
-        #arctan2 gives angle between -pi and pi 
-        #towardAngle = np.arctan2(towardPointLineMid[1],towardPointLineMid[0])
-        #towardAngleDegrees = np.round(towardAngle*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy
-        
-        #weve moved to the next vertex so no need to calc again
-        towardAngleDegrees = awayAngleDegrees
-        
-        awayAngle = np.arctan2(awayPointLineMid[1],awayPointLineMid[0])
-        awayAngleDegrees = np.round((awayAngle)*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy
-
-        #if this is true then the angle from x1 to x2 is greater than 90 degrees
-        if (towardAngleDegrees+int(angleAccuracy/2)-awayAngleDegrees)%angleAccuracy > int(angleAccuracy/4):
-            #the line from x0 to x1 is unsuitable to build the grid so we use 
-            #the line from x2 to x0
-            pointFrom = xs[2]
-            pointTo = xs[0]
-            
-    awayPointLineMid = 0.5*(pointTo-pointFrom)
-
-    awayAngle = np.arctan2(awayPointLineMid[1],awayPointLineMid[0])
-    inwardNormalAwayAngle = awayAngle+np.pi/2
-    #inwardNormalAngle = (-np.round((outwardNormalAwayAngle)*angleAccuracy/(2*np.pi)).astype(int))%angleAccuracy
-
-    #we will now walk along the path from pointFrom to pointTo
-    #and walk in the direction of the inward normal and add points
-    #to the grid as long as we dont land outside of the triangle
-    distBetweenPoints = np.linalg.norm(pointFrom-pointTo)
-    interPoints = np.round(2*(gridSize-1)*distBetweenPoints)
-    interPoints = interPoints.astype(int)
-    for k in range(interPoints+1):
-        #here we are walking along the line pointFrom to pointTo
-        stepTaken = pointFrom+k/interPoints*(pointTo-pointFrom)
-        stepTakenAsGrid = pointToGridIndex(stepTaken[0], stepTaken[1], gridSize)
-        grid[stepTakenAsGrid[1],stepTakenAsGrid[0]] = True
-        
-        #here we additionally walk along the inward normal and add points to the grid
-        stepInNormal = np.array([1/(2*gridSize)*np.cos(inwardNormalAwayAngle), 1/(2*gridSize)*np.sin(inwardNormalAwayAngle)])
-        stepAlongNormalHere = stepTaken+stepInNormal
-        while newCheckIfInTriangle(stepAlongNormalHere, np.array(xs)):
-            stepAlongNormalHere = stepAlongNormalHere+stepInNormal
-        stepEndAsGrid = pointToGridIndex(stepAlongNormalHere[0], stepAlongNormalHere[1], gridSize)
-        allPointsOnLine = get_line(stepTakenAsGrid, stepEndAsGrid)
-        for val in allPointsOnLine:
-            grid[val[1],val[0]] = True
-            
-    return grid
-
-
-
-
-def check(xs):
-    return (xs[0,0] - xs[2,0]) * (xs[1,1] - xs[2,1]) - (xs[1,0] - xs[2,0]) * (xs[0,1] - xs[2,1])
-
-def check2(p, xs):
-    d1 = check(np.array([p,xs[0],xs[1]]))
-    d2 = check(np.array([p,xs[1],xs[2]]))
-    d3 = check(np.array([p,xs[2],xs[3]]))
-
-    has_neg = d1 < 0 or d2 < 0 or d3 < 0
-    has_pos = d1 > 0 or d2 > 0 or d3 > 0
-    
-    return not (has_neg and has_pos)
-
-def gridOfAllPointsInPolygon2(poly, gridSize=200, angleAccuracy=360):
-    grid = np.zeros([gridSize,gridSize],dtype=int)
-    #as the first and last element in the list poly is the same starting point, we leave it away
-    for index in range(1,len(poly)-2):
-        #the only polgons we can construct are star-convex so we just have to check for
-        #all the triangles that make up the polygon
-        grid = np.logical_or(grid, gridOfAllPointsInTriangle2([poly[0],poly[index],poly[index+1],poly[0]],gridSize=gridSize,angleAccuracy=angleAccuracy))
-        #if checkIfPointInTriangle(p, [poly[0],poly[index],poly[index+1],poly[0]]):
-    return grid > 0
-
-def checkIfPointIsInPolygonNew1(p, poly):
-    #as the first and last element in the list poly is the same starting point, we leave it away
-    for index in range(1,len(poly)-2):
-        xs = np.array([poly[0],poly[index],poly[index+1],poly[0]])
-        if np.min(xs[:,0]) <= p[0] <= np.max(xs[:,0]) and np.min(xs[:,1]) <= p[1] <= np.max(xs[:,1]):
-        #the only polgons we can construct are star-convex so we just have to check for
-        #all the triangles that make up the polygon
-            if checkIfPointInTriangle(p, xs):
-                return True
-    return False
-
-def checkIfPointIsInPolygonNew2(p, poly):
-    #as the first and last element in the list poly is the same starting point, we leave it away
-    for index in range(1,len(poly)-2):
-        xs = np.array([poly[0],poly[index],poly[index+1],poly[0]])
-        if np.min(xs[:,0]) <= p[0] <= np.max(xs[:,0]) and np.min(xs[:,1]) <= p[1] <= np.max(xs[:,1]):
-        #the only polgons we can construct are star-convex so we just have to check for
-        #all the triangles that make up the polygon
-            if newCheckIfInTriangle(p, xs):
-                return True
-    return False
-
-def checkIfPointIsInPolygonNew3(p, poly):
-    #as the first and last element in the list poly is the same starting point, we leave it away
-    for index in range(1,len(poly)-2):
-        xs = np.array([poly[0],poly[index],poly[index+1],poly[0]])
-        if np.min(xs[:,0]) <= p[0] <= np.max(xs[:,0]) and np.min(xs[:,1]) <= p[1] <= np.max(xs[:,1]):
-        #the only polgons we can construct are star-convex so we just have to check for
-        #all the triangles that make up the polygon
-            if check2(p, xs):
-                return True
-    return False
-
-
-def polyGrid1(poly, gridSize=200):
-    grid = np.zeros([gridSize,gridSize],dtype=bool)
-    for j in range(gridSize):
-        for k in range(gridSize):
-            p = gridIndexToPoint(j, k, gridSize)
-            if np.min(poly[:,0]) <= p[0] <= np.max(poly[:,0]) and np.min(poly[:,1]) <= p[1] <= np.max(poly[:,1]):
-                grid[k,j] = checkIfPointIsInPolygonNew1(p,poly)
-    return grid
-
-def polyGrid2(poly, gridSize=200):
-    grid = np.zeros([gridSize,gridSize],dtype=bool)
-    for j in range(gridSize):
-        for k in range(gridSize):
-            p = gridIndexToPoint(j, k, gridSize)
-            if np.min(poly[:,0]) <= p[0] <= np.max(poly[:,0]) and np.min(poly[:,1]) <= p[1] <= np.max(poly[:,1]):
-                grid[k,j] = checkIfPointIsInPolygonNew2(p,poly)
-    return grid
-                
-def polyGrid3(poly, gridSize=200):
-    grid = np.zeros([gridSize,gridSize],dtype=bool)
-    for j in range(gridSize):
-        for k in range(gridSize):
-            p = gridIndexToPoint(j, k, gridSize)
-            if np.min(poly[:,0]) <= p[0] <= np.max(poly[:,0]) and np.min(poly[:,1]) <= p[1] <= np.max(poly[:,1]):
-                grid[k,j] = checkIfPointIsInPolygonNew3(p,poly)
-    return grid
-
-
-
-
-poly = generatePolygon(3)
-
-drawPolygon(poly, output=True)
 
 # tic = time.perf_counter()
 # grid1 = polyGrid1(poly)
@@ -723,67 +438,69 @@ drawPolygon(poly, output=True)
 
 
 
-nums = 20
-way1 = 0.0
-way2 = 0.0
-way3 = 0.0
-way4 = 0.0
-way5 = 0.0
-way6 = 0.0
-for k in range(nums):
-    poly = generatePolygon(7)
-    tic = time.perf_counter()
-    grid1 = polyGrid1(poly)
-    toc = time.perf_counter()
-    way1 += toc - tic
-    print(f"Way 1 took {toc - tic:0.4f} seconds\n")
-    tic = time.perf_counter()
-    grid2 = polyGrid2(poly)
-    toc = time.perf_counter()
-    way2 += toc - tic
-    print(f"Way 2 took {toc - tic:0.4f} seconds\n")
-    tic = time.perf_counter()
-    grid3 = polyGrid3(poly)
-    toc = time.perf_counter()
-    way3 += toc - tic
-    print(f"Way 3 took {toc - tic:0.4f} seconds\n")
-    tic = time.perf_counter()
-    grid4 = gridOfAllPointsInPolygon(poly, gridSize=200, angleAccuracy=360)
-    toc = time.perf_counter()
-    way4 += toc - tic
-    print(f"Old way took {toc - tic:0.4f} seconds\n")
-    tic = time.perf_counter()
-    grid5 = gridOfAllPointsInPolygon2(poly, gridSize=200, angleAccuracy=360)
-    toc = time.perf_counter()
-    way5 += toc - tic
-    print(f"Old new way took {toc - tic:0.4f} seconds\n")
-    tic = time.perf_counter()
-    fig = plt.figure(figsize=(2,2), dpi=100, frameon=False)
-    plt.xlim(-1,1)
-    plt.ylim(-1,1)
-    plt.axis('off')
-    plt.fill(poly[:,0],poly[:,1], "black")
-    io_buf = io.BytesIO()
-    fig.savefig(io_buf,format='raw', dpi=100)
-    io_buf.seek(0)
-    grid6 = np.reshape(np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
-                          newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1))[:,:,0] < 255
-    io_buf.close()
-    grid6 = np.transpose([np.flip(grid6[:,val]) for val in range(200)])
-    plt.close(fig)
-    toc = time.perf_counter()
-    way6 += toc - tic
-    print(f"Pyplot took {toc - tic:0.4f} seconds\n")
+# nums = 20
+# way1 = 0.0
+# way2 = 0.0
+# way3 = 0.0
+# way4 = 0.0
+# way5 = 0.0
+# way6 = 0.0
+# size = 1000
+# dp = int(size/2)
+# for k in range(nums):
+#     poly = generatePolygon(7)
+#     # tic = time.perf_counter()
+#     # grid1 = polyGrid1(poly)
+#     # toc = time.perf_counter()
+#     # way1 += toc - tic
+#     # print(f"Way 1 took {toc - tic:0.4f} seconds\n")
+#     # tic = time.perf_counter()
+#     # grid2 = polyGrid2(poly)
+#     # toc = time.perf_counter()
+#     # way2 += toc - tic
+#     # print(f"Way 2 took {toc - tic:0.4f} seconds\n")
+#     # tic = time.perf_counter()
+#     # grid3 = polyGrid3(poly)
+#     # toc = time.perf_counter()
+#     # way3 += toc - tic
+#     # print(f"Way 3 took {toc - tic:0.4f} seconds\n")
+#     # tic = time.perf_counter()
+#     # grid4 = gridOfAllPointsInPolygon(poly, gridSize=size, angleAccuracy=360)
+#     # toc = time.perf_counter()
+#     # way4 += toc - tic
+#     # print(f"Old way took {toc - tic:0.4f} seconds\n")
+#     tic = time.perf_counter()
+#     grid5 = gridOfAllPointsInPolygon2(poly, gridSize=size, angleAccuracy=360)
+#     toc = time.perf_counter()
+#     way5 += toc - tic
+#     print(f"Old new way took {toc - tic:0.4f} seconds\n")
+#     tic = time.perf_counter()
+#     fig = plt.figure(figsize=(2,2), dpi=dp, frameon=False)
+#     plt.xlim(-1,1)
+#     plt.ylim(-1,1)
+#     plt.axis('off')
+#     plt.fill(poly[:,0],poly[:,1], "black")
+#     io_buf = io.BytesIO()
+#     fig.savefig(io_buf,format='raw', dpi=dp)
+#     io_buf.seek(0)
+#     grid6 = np.reshape(np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
+#                           newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1))[:,:,0] < 255
+#     io_buf.close()
+#     grid6 = np.transpose([np.flip(grid6[:,val]) for val in range(200)])
+#     plt.close(fig)
+#     toc = time.perf_counter()
+#     way6 += toc - tic
+#     print(f"Pyplot took {toc - tic:0.4f} seconds\n")
 
-way1 /= nums
-way2 /= nums
-way3 /= nums
-way4 /= nums
-way5 /= nums
-way6 /= nums
+# way1 /= nums
+# way2 /= nums
+# way3 /= nums
+# way4 /= nums
+# way5 /= nums
+# way6 /= nums
 
 
-print(f"Way 1: {way1:0.4f}\nWay 2: {way2:0.4f}\nWay 3: {way3:0.4f}\nWay 4: {way4:0.4f}\nWay 5: {way5:0.4f}\nWay 6: {way6:0.4f}")
+# print(f"Way 1: {way1:0.4f}\nWay 2: {way2:0.4f}\nWay 3: {way3:0.4f}\nWay 4: {way4:0.4f}\nWay 5: {way5:0.4f}\nWay 6: {way6:0.4f}")
 
 # Way 1: 2.7858
 # Way 2: 1.9747
