@@ -109,7 +109,7 @@ def pointToGridIndex(x,y,gridSize):
 def gridIndexToPoint(x,y,gridSize):
     return np.array([2/(gridSize-1)*x-1,2/(gridSize-1)*y-1])
 
-np.random.seed(99)
+np.random.seed(104)
 
 def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360):
     a = ell.get_width()/2
@@ -118,8 +118,16 @@ def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360):
     angle = np.deg2rad(ell.get_angle())
     t = np.linspace(0, 2*np.pi, angleAccuracy)
     
+    #both of these calculate the rotated ellipse and are almost equally fast...
     Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle)+x0, a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)+y0])  
-    
+    # Ell = np.array([a*np.cos(t), b*np.sin(t)])  
+    # r = rot(angle)
+    # Ellrot = np.zeros((2,Ell.shape[1]))
+    # for i in range(Ell.shape[1]):
+    #     Ellrot[:,i] = r@Ell[:,i]
+    # plt.xlim(-1,1)
+    # plt.ylim(-20,20)
+    # plt.plot(x0+Ell_rot[0,:] , y0+Ell_rot[1,:],'darkorange' ) 
    #rotated ellipse
     plt.plot(Ellrot[0,:],Ellrot[1,:])
     # WFSetList = [[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[np.round((angle+np.arctan2(1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy]] for j in range(angleAccuracy)]
