@@ -475,3 +475,40 @@ def gridEll(ell, gridSize=200):
 #             if checkIfPointInEllipse(point,ell):
 #                 listOfPoints.append(point)
 #     return listOfPoints
+
+def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360):
+    a = ell.get_width()/2
+    b = ell.get_height()/2
+    x0,y0 = ell.get_center()
+    angle = np.deg2rad(ell.get_angle())
+    t = np.linspace(0, 2*np.pi, angleAccuracy)
+    Ell = np.array([a*np.cos(t), b*np.sin(t)])  
+    
+    r = rot(angle)
+    #2-D rotation matrix
+
+    Ell_rot = np.zeros((2,Ell.shape[1]))
+    for i in range(Ell.shape[1]):
+        Ell_rot[:,i] = r@Ell[:,i]
+    plt.xlim(-1,1)
+    plt.ylim(-20,20)
+    plt.plot(x0+Ell_rot[0,:] , y0+Ell_rot[1,:],'darkorange' )    #rotated ellipse
+    # WFSetList = [[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[np.round((angle+np.arctan2(1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy]] for j in range(angleAccuracy)]
+    # x = np.linspace(-a, a, gridSize*2,endpoint=True)
+    # yPlus = [b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
+    # yMinus = [-b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
+    #we allow the below things to divide by zero because
+    #arctan2 can handle when one of the parameters is infinity
+    #but I dont want to have to see the warnings so I supress them
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        anglesPlus = [j+np.rad2deg(angle) for j in range(angleAccuracy)]
+        anglesOther = [np.rad2deg(angle+np.arctan(a*np.tan(j)/b)) for j in range(angleAccuracy)]
+        #anglesPlus = [np.round((angle+np.arctan2(1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for j in range(angleAccuracy//2)]
+        #anglesPlus.extend([np.round((angle+np.arctan2(-1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for j in range(angleAccuracy//2,angleAccuracy)])
+    # xnew = [x0+val for val in x]
+
+    WFSetList = [[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[anglesOther[j]]] for j in range(angleAccuracy)]
+    #WFSetList.extend([[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[anglesMinus[val]]] for j in range(angleAccuracy//2,angleAccuracy)]
+    
+    return WFSetList

@@ -94,61 +94,6 @@ def drawGrid(grid):
     plt.imshow(grid, origin='lower') 
     plt.show()
 
-def generatePolygon(pointNum, smallestSize=10e-5, niceness=0.1, minRad=0.1, offCenter=True):
-    """
-
-    Parameters
-    ----------
-    pointNum : float
-        desired number of vertices -1
-    smallestSize : float, optional
-        a machine epsilon type thing to stay away from boundaries, optional
-        The default is 10e-5.
-    niceness : float, optional
-        has to do with the spikyness of the polygon, between 0 and pi, doesnt actually prevent spikyness 100% either
-    minRad : float, optional
-        try to stay this far away from boundary and try to let individual edges be at least this large
-    offCenter : bool, optional
-        if generate polygon with non-start-point (0,0). The default is True.
-
-    Returns
-    -------
-    points : array of float pairs
-        pointNum +2 vertices that in this order define the polygon
-        start and end point are the same
-    """
-    phis = []
-    phis.append(np.random.uniform(0, np.pi-niceness))
-    for val in range(pointNum):
-        new = phis[val]+np.random.uniform(niceness/2, np.pi-niceness)
-        if new>2*np.pi:
-            new -= 2*np.pi
-        phis.append(new)
-    phis = np.sort(phis)
-    if offCenter:
-        (x0,y0) =  np.random.uniform(-1+minRad, 1-minRad, 2)
-        points = []
-        for val in range(pointNum):
-            maxRad = 1.0
-            phi = phis[val]
-            if (3/2)*np.pi<phi or phi<(1/2)*np.pi:
-                maxRad = np.min([1,(1-x0)*(np.cos(phi))**(-1)])
-            if (3/2)*np.pi>phi>(1/2)*np.pi:
-                maxRad = np.min([1,-(1+x0)*(np.cos(phi))**(-1)])
-            if 0<phi<np.pi:
-                maxRad = np.min([maxRad, (1-y0)*(np.sin(phi))**(-1)])
-            if np.pi<phi<2*np.pi:
-                maxRad = np.min([maxRad, -(1+y0)*(np.sin(phi))**(-1)])
-            rad = np.random.uniform(np.min([(maxRad-smallestSize)/2,minRad+smallestSize]),maxRad-smallestSize)
-            points.append((x0+rad*(np.cos(phis[val])),y0+rad*(np.sin(phis[val]))))
-        points.insert(0,(x0,y0))
-        points.append((x0,y0))
-    else:
-        rads = np.random.uniform(smallestSize+minRad, 1-smallestSize, pointNum)
-        points = [(rads[val]*np.cos(phis[val]),rads[val]*np.sin(phis[val])) for val in range(pointNum)]
-        points.insert(0,(0,0))
-        points.append((x0,y0))
-    return np.array(points)
 
 def drawPolygon(points, output=True):
     for val in range(len(points)-1):
@@ -164,7 +109,7 @@ def pointToGridIndex(x,y,gridSize):
 def gridIndexToPoint(x,y,gridSize):
     return np.array([2/(gridSize-1)*x-1,2/(gridSize-1)*y-1])
 
-np.random.seed(70)
+np.random.seed(99)
 
 def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360):
     a = ell.get_width()/2
@@ -180,25 +125,27 @@ def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360):
     Ell_rot = np.zeros((2,Ell.shape[1]))
     for i in range(Ell.shape[1]):
         Ell_rot[:,i] = r@Ell[:,i]
-    # plt.xlim(-1,1)
-    # plt.ylim(-1,1)
-    # plt.plot(x0+Ell_rot[0,:] , y0+Ell_rot[1,:],'darkorange' )    #rotated ellipse
-    # plt.show()
-    WFSetList = [[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[np.round((angle+np.arctan2(1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy]] for j in range(angleAccuracy)]
+    plt.xlim(-1,1)
+    plt.ylim(-1,1)
+    plt.plot(x0+Ell_rot[0,:] , y0+Ell_rot[1,:],'darkorange' )    #rotated ellipse
+    # WFSetList = [[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[np.round((angle+np.arctan2(1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy]] for j in range(angleAccuracy)]
     # x = np.linspace(-a, a, gridSize*2,endpoint=True)
     # yPlus = [b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
     # yMinus = [-b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
     #we allow the below things to divide by zero because
     #arctan2 can handle when one of the parameters is infinity
     #but I dont want to have to see the warnings so I supress them
-    # with warnings.catch_warnings():
-    #     warnings.simplefilter("ignore")
-    #     anglesPlus = [np.round((np.arctan2(1,2*b*(a**(-2))*val/(np.sqrt(1-(val/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for val in x]
-    #     anglesMinus = [np.round((np.arctan2(-1,2*b*(a**(-2))*val/(np.sqrt(1-(val/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for val in x]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        #anglesPlus = [j+np.rad2deg(angle) for j in range(angleAccuracy)]
+        anglesOther2 = [np.rad2deg(angle+np.arctan(np.tan(j)*a/b)) for j in np.linspace(0, 2*np.pi, angleAccuracy)]
+        #anglesOther = [np.rad2deg(angle+np.arctan2(Ell[1,j]/(b**2),Ell[0,j]/(a**2))) for j in range(angleAccuracy)]
+        #anglesPlus = [np.round((angle+np.arctan2(1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for j in range(angleAccuracy//2)]
+        #anglesPlus.extend([np.round((angle+np.arctan2(-1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for j in range(angleAccuracy//2,angleAccuracy)])
     # xnew = [x0+val for val in x]
 
-    # WFSetList = [[pointToGridIndex(xnew[val],yPlus[val],gridSize),[anglesPlus[val]]] for val in range(len(x))]
-    # WFSetList.extend([[pointToGridIndex(xnew[val],yMinus[val],gridSize),[anglesMinus[val]]] for val in range(len(x))])
+    WFSetList = [[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[anglesOther2[j]]] for j in range(angleAccuracy)]
+    #WFSetList.extend([[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[anglesMinus[val]]] for j in range(angleAccuracy//2,angleAccuracy)]
     
     return WFSetList
 
@@ -262,7 +209,7 @@ def drawWFSetList(WFSetList,gridSize=200, saveFile=True):
             #to plot the WFset we just make small lines in the correct direction
             #at the point
             vec = [0.05*np.cos((2*np.pi*angle/360)), 0.05*np.sin((2*np.pi*angle/360))]
-            plt.plot([point[0],point[0]+vec[0]],[point[1],point[1]+vec[1]],color='black',linewidth=0.3)
+            plt.plot([point[0]-vec[0],point[0]+vec[0]],[point[1]-vec[1],point[1]+vec[1]],color='black',linewidth=0.3)
     plt.xlim(-1,1)
     plt.ylim(-1,1)
     if saveFile:
@@ -331,13 +278,6 @@ def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     drawWFSetList(WFSetList, gridSize=gridSize, saveFile=False)
     toc = time.perf_counter()
     print(f"Plotting polygon with wavefrontset picture took {toc - tic:0.4f} seconds")
-    
-    #This is the old method that is one order of magnitude smaller than the 
-    #new method, used below
-    # tic = time.perf_counter()
-    # grid1 = constructImageInGridOfPolygon(poly, gridSize=gridSize)
-    # toc = time.perf_counter()
-    # print(f"Get inside of polygon as grid old way took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
     grid = gridFromPolygon(poly, gridSize=gridSize)
@@ -358,13 +298,13 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     print(f"Ellipse generation took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    WFSetList = ellipseToWFsetList(ell, gridSize=gridSize, angleAccuracy=angleAccuracy)
+    WFSetList = ellipseToWFsetList(ell, gridSize=gridSize, angleAccuracy=360)
     toc = time.perf_counter()
     print(f"Wavefrontset calculation took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
     #plotEll(ell, output=False)
-    drawWFSetList(WFSetList, gridSize=gridSize, saveFile=False)
+    drawWFSetList(WFSetList, gridSize=gridSize, saveFile=True)
     toc = time.perf_counter()
     print(f"Plotting ellipse with wavefrontset picture took {toc - tic:0.4f} seconds")
     
@@ -374,8 +314,8 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     print(f"Get inside of ellipse as grid took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    #plt.imshow(grid)
-    #plt.show()
+    # plt.imshow(grid)
+    # plt.show()
     toc = time.perf_counter()
     print(f"Drawing the grid of polygon took {toc - tic:0.4f} seconds\n")
 
