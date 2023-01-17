@@ -29,9 +29,10 @@ def genEll():
     
     maxlen = np.sqrt(1+(np.tan(angle))**2)
     a = np.random.uniform(0,maxlen)
-    
-    maxb1 = np.sqrt((1-(a*np.cos(angle))**2)/(np.sin(angle)**2))
-    maxb2 = np.sqrt((1-(a*np.sin(angle))**2)/(np.cos(angle)**2))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        maxb1 = np.sqrt((1-(a*np.cos(angle))**2)/(np.sin(angle)**2))
+        maxb2 = np.sqrt((1-(a*np.sin(angle))**2)/(np.cos(angle)**2))
     
     maxb = np.min([maxb1,maxb2])
 
@@ -41,8 +42,8 @@ def genEll():
     maxX = 1-np.sqrt((a*np.cos(angle))**2+(b*np.sin(angle))**2)
     maxY = 1-np.sqrt((a*np.sin(angle))**2+(b*np.cos(angle))**2)
         
-    centerX = np.random.uniform(-maxX,maxX)
-    centerY = np.random.uniform(-maxY,maxY)
+    centerX = 0#np.random.uniform(-maxX,maxX)
+    centerY = 0#np.random.uniform(-maxY,maxY)
     
     center = np.array([centerX,centerY])
     return Ellipse(center, 2*a,2*b, angle=np.rad2deg(angle))
@@ -109,47 +110,100 @@ def pointToGridIndex(x,y,gridSize):
 def gridIndexToPoint(x,y,gridSize):
     return np.array([2/(gridSize-1)*x-1,2/(gridSize-1)*y-1])
 
-np.random.seed(104)
+np.random.seed(107)
 
-def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360):
+def calc2plus(a,b,p,x):
+    return (np.sin(p)*np.cos(p)*(b**2-a**2)-2*x*a*b/np.sqrt((a*np.cos(p))**2+(b*np.sin(p))**2-x**2))/((a*np.cos(p))**2+(b*np.sin(p))**2)
+
+def calc2minus(a,b,p,x):
+    return (np.sin(p)*np.cos(p)*(b**2-a**2)+2*x*a*b/np.sqrt((a*np.cos(p))**2+(b*np.sin(p))**2-x**2))/((a*np.cos(p))**2+(b*np.sin(p))**2)
+
+
+def calc(a,b,p):
+    #return  (a*np.cos(t)*np.sin(p)+b*np.sin(t)*np.cos(p) +y0)/(a*np.cos(t)*np.cos(p)-b*np.sin(t)*np.sin(p)+x0)*(a**2*np.cos(p)-b**2*np.sin(p))/(b**2*np.cos(p)+a**2*np.sin(p))
+    return ((a**2)*np.cos(p)-(b**2)*np.sin(p))/((b**2)*np.cos(p)+(a**2)*np.sin(p))
+
+def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360, method=4):
     a = ell.get_width()/2
     b = ell.get_height()/2
     x0,y0 = ell.get_center()
     angle = np.deg2rad(ell.get_angle())
-    t = np.linspace(0, 2*np.pi, angleAccuracy)
-    
-    #both of these calculate the rotated ellipse and are almost equally fast...
-    Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle)+x0, a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)+y0])  
-    # Ell = np.array([a*np.cos(t), b*np.sin(t)])  
-    # r = rot(angle)
-    # Ellrot = np.zeros((2,Ell.shape[1]))
-    # for i in range(Ell.shape[1]):
-    #     Ellrot[:,i] = r@Ell[:,i]
-    # plt.xlim(-1,1)
-    # plt.ylim(-20,20)
-    # plt.plot(x0+Ell_rot[0,:] , y0+Ell_rot[1,:],'darkorange' ) 
-   #rotated ellipse
-    plt.plot(Ellrot[0,:],Ellrot[1,:])
-    # WFSetList = [[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[np.round((angle+np.arctan2(1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy]] for j in range(angleAccuracy)]
-    # x = np.linspace(-a, a, gridSize*2,endpoint=True)
-    # yPlus = [b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
-    # yMinus = [-b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
-    #we allow the below things to divide by zero because
-    #arctan2 can handle when one of the parameters is infinity
-    #but I dont want to have to see the warnings so I supress them
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        #anglesPlus = [j+np.rad2deg(angle) for j in range(angleAccuracy)]
-        anglesOther2 = [np.rad2deg(angle+np.arctan(np.tan(j)*a/b)) for j in np.linspace(0, 2*np.pi, angleAccuracy)]
-        #anglesOther = [np.rad2deg(angle+np.arctan2(Ell[1,j]/(b**2),Ell[0,j]/(a**2))) for j in range(angleAccuracy)]
-        #anglesPlus = [np.round((angle+np.arctan2(1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for j in range(angleAccuracy//2)]
-        #anglesPlus.extend([np.round((angle+np.arctan2(-1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for j in range(angleAccuracy//2,angleAccuracy)])
-    # xnew = [x0+val for val in x]
 
-    WFSetList = [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]])),[anglesOther2[j]]] for j in range(angleAccuracy)]
-    #WFSetList.extend([[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[anglesMinus[val]]] for j in range(angleAccuracy//2,angleAccuracy)]
+    if method == 2:
+        t = np.linspace(-np.pi/2, 3/2*np.pi, angleAccuracy)
+        Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle)+x0, a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)+y0])  
+
+        anglesOther2 = [360+np.rad2deg(angle+np.arctan2(np.tan(j)*a,b)) for j in np.linspace(-np.pi/2,np.pi/2, angleAccuracy//2)]
+        anglesOther2.extend([360+np.rad2deg(np.pi+angle+np.arctan(np.tan(j)*a/b)) for j in np.linspace(np.pi/2, 3/2*np.pi, angleAccuracy//2)])
+        anglesOther2[180] += 180
+        return [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[anglesOther2[j]]] for j in range(angleAccuracy)]
+
+    else:
+        t = np.linspace(0, 2*np.pi, angleAccuracy)
+        Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle)+x0, a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)+y0])  
+
+        angle5 = [np.rad2deg(3/2*np.pi+np.arctan2(Ellrot[1,j+1]-Ellrot[1,j],Ellrot[0,j+1]-Ellrot[0,j])) for j in range(angleAccuracy-1)]
+        angle5.extend([np.rad2deg(3/2*np.pi+np.arctan2(Ellrot[1,-1]-Ellrot[1,-2],Ellrot[0,-1]-Ellrot[0,-2]))])
+        return [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[angle5[j]]] for j in range(angleAccuracy)]
+
     
-    return WFSetList
+    # #both of these calculate the rotated ellipse and are almost equally fast...
+    # #Ell = np.array([a*np.cos(t), b*np.sin(t)])  
+    # # r = rot(angle)
+    # # Ellrot = np.zeros((2,Ell.shape[1]))
+    # # for i in range(Ell.shape[1]):
+    # #     Ellrot[:,i] = r@Ell[:,i]
+    # # plt.xlim(-1,1)
+    # # plt.ylim(-20,20)
+    # # plt.plot(x0+Ell_rot[0,:] , y0+Ell_rot[1,:],'darkorange' ) 
+    # #rotated ellipse
+    # #plt.plot(Ellrot[0,:],Ellrot[1,:])
+    # # WFSetList = [[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[np.round((angle+np.arctan2(1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy]] for j in range(angleAccuracy)]
+    # # x = np.linspace(-a, a, gridSize*2,endpoint=True)
+    # # yPlus = [b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
+    # # yMinus = [-b*np.sqrt(1-a**(-2)*(val**2))+y0 for val in x]
+    # #we allow the below things to divide by zero because
+    # #arctan2 can handle when one of the parameters is infinity
+    # #but I dont want to have to see the warnings so I supress them
+    # with warnings.catch_warnings():
+    #     warnings.simplefilter("ignore")
+    #     #angle3 = [np.rad2deg(np.arctan(Ellrot[1,j]/Ellrot[0,j]*calc(a,b,angle))) for j in range(angleAccuracy//2)]
+    #     #angle3.extend([np.rad2deg(np.pi+np.arctan(Ellrot[1,j]/Ellrot[0,j]*calc(a,b,angle))) for j in range(angleAccuracy//2,angleAccuracy)])
+
+    #     #anglesPlus = [j+np.rad2deg(angle) for j in range(angleAccuracy)]
+    #     anglesOther2 = [np.rad2deg(angle+np.arctan2(np.tan(j)*a,b)) for j in np.linspace(-np.pi/2,np.pi/2, angleAccuracy//2)]
+    #     anglesOther2.extend([np.rad2deg(np.pi+angle+np.arctan(np.tan(j)*a/b)) for j in np.linspace(np.pi/2, 3/2*np.pi, angleAccuracy//2)])
+
+    #     #
+    #     #anglesOther = [np.rad2deg(angle+np.arctan2(Ell[1,j]/(b**2),Ell[0,j]/(a**2))) for j in range(angleAccuracy)]
+    #     #anglesPlus = [np.round((angle+np.arctan2(1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for j in range(angleAccuracy//2)]
+    #     #anglesPlus.extend([np.round((angle+np.arctan2(-1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for j in range(angleAccuracy//2,angleAccuracy)])
+    
+    #     #angle4 = [np.rad2deg(np.arctan2(-1,calc2minus(a,b,angle, Ellrot[0,j]))) for j in range(angleAccuracy//2)]
+    #     #angle4.extend([np.rad2deg(np.arctan2(-1,calc2minus(a,b,angle, Ellrot[0,j]))) for j in range(angleAccuracy//2,angleAccuracy)])
+    
+    # angle5 = [np.rad2deg(3/2*np.pi+np.arctan2(Ellrot[1,j+1]-Ellrot[1,j],Ellrot[0,j+1]-Ellrot[0,j])) for j in range(angleAccuracy-1)]
+    # angle5.extend([np.rad2deg(3/2*np.pi+np.arctan2(Ellrot[1,-1]-Ellrot[1,-2],Ellrot[0,-1]-Ellrot[0,-2]))])
+    # #angle5.extend([np.rad2deg(3/2*np.pi+np.arctan((Ellrot[1,(j+1)%360]-Ellrot[1,j%360])/(Ellrot[0,(j+1)%360]-Ellrot[0,j%360]))) for j in range(angleAccuracy//2, angleAccuracy)])
+
+    # #anglediff = [angle5[j]-anglesOther2[j] for j in range(angleAccuracy)]
+    # # xnew = [x0+val for val in x]
+    
+    
+    # #method 1 is rubbish
+    # #method 3 is rubbish too
+    # if method == 3:
+    #     WFSetList = [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[angle3[j]]] for j in range(angleAccuracy)]
+    # elif method == 2:
+    #     WFSetList = [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[anglesOther2[j]]] for j in range(angleAccuracy)]
+    # elif method == 1:
+    #     WFSetList = [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[anglesPlus[j]]] for j in range(angleAccuracy)]
+    # elif method == 4:
+    #     WFSetList = [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[angle5[j]]] for j in range(angleAccuracy)]
+
+    # #WFSetList.extend([[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[anglesMinus[val]]] for j in range(angleAccuracy//2,angleAccuracy)]
+    
+    # return WFSetList
 
 def polygonToWFsetList(poly, gridSize=200, angleAccuracy=360):
     WFSetList = []
@@ -202,7 +256,8 @@ def polygonToWFsetList(poly, gridSize=200, angleAccuracy=360):
         towardPointLineMid = awayPointLineMid
     return WFSetList
              
-def drawWFSetList(WFSetList,gridSize=200, saveFile=True):
+def drawWFSetList(WFSetList,gridSize=200, saveFile=True, method=1):
+    #fig = plt.figure(figsize=(2,2), dpi=900)
     for val in range(len(WFSetList)):
         pointGrid = WFSetList[val][0]
         point = grid2point(pointGrid,gridSize)
@@ -211,11 +266,11 @@ def drawWFSetList(WFSetList,gridSize=200, saveFile=True):
             #to plot the WFset we just make small lines in the correct direction
             #at the point
             vec = [0.05*np.cos((2*np.pi*angle/360)), 0.05*np.sin((2*np.pi*angle/360))]
-            plt.plot([point[0]-vec[0],point[0]+vec[0]],[point[1]-vec[1],point[1]+vec[1]],color='black',linewidth=0.3)
+            plt.plot([point[0],point[0]+vec[0]],[point[1],point[1]+vec[1]],color='black',linewidth=0.3)
     plt.xlim(-1,1)
     plt.ylim(-1,1)
     if saveFile:
-        plt.savefig('file.png',dpi=300)
+        plt.savefig(f'fileAngle{method:d}.png',dpi=900)
     plt.show()
 
 def convertWFListToWFGridLeoConvetion(List, gridSize=200, angleAccuracy=360):
@@ -291,7 +346,7 @@ def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     toc = time.perf_counter()
     print(f"Drawing the grid of polygon took {toc - tic:0.4f} seconds\n")
 
-def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):   
+def fullEllipseRoutineTimer(gridSize = 800, angleAccuracy=360):   
     print(f"Grid size is {gridSize:d}")
 
     tic = time.perf_counter()
@@ -300,13 +355,15 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     print(f"Ellipse generation took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    WFSetList = ellipseToWFsetList(ell, gridSize=gridSize, angleAccuracy=360)
+    WFSetList2 = ellipseToWFsetList(ell, gridSize=gridSize, angleAccuracy=360, method=2)
+    drawWFSetList(WFSetList2, gridSize=gridSize, saveFile=True,method=2)
     toc = time.perf_counter()
     print(f"Wavefrontset calculation took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
+    WFSetList3 = ellipseToWFsetList(ell, gridSize=gridSize, angleAccuracy=360, method=4)
+    drawWFSetList(WFSetList3, gridSize=gridSize, saveFile=True,method=4)
     #plotEll(ell, output=False)
-    drawWFSetList(WFSetList, gridSize=gridSize, saveFile=True)
     toc = time.perf_counter()
     print(f"Plotting ellipse with wavefrontset picture took {toc - tic:0.4f} seconds")
     
