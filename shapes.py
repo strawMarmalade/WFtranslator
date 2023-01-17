@@ -36,6 +36,8 @@ def genEll():
     maxlen = np.sqrt(1+(np.tan(angle))**2)
     a = np.random.uniform(0,maxlen)
     with warnings.catch_warnings():
+        #I'm okay with dividing by zero here (which can only happen in maxb1)
+        #because that just means I take it to be infinity
         warnings.simplefilter("ignore")
         maxb1 = np.sqrt((1-(a*np.cos(angle))**2)/(np.sin(angle)**2))
         maxb2 = np.sqrt((1-(a*np.sin(angle))**2)/(np.cos(angle)**2))
@@ -47,22 +49,13 @@ def genEll():
     #these are the maximal distances to border
     maxX = 1-np.sqrt((a*np.cos(angle))**2+(b*np.sin(angle))**2)
     maxY = 1-np.sqrt((a*np.sin(angle))**2+(b*np.cos(angle))**2)
-        
-    print(maxX,maxY)
-    
+            
     centerX = np.random.uniform(-maxX,maxX)
     centerY = np.random.uniform(-maxY,maxY)
     
     center = np.array([centerX,centerY])
     return Ellipse(center, 2*a,2*b, angle=np.rad2deg(angle))
 
-
-# fig = plt.figure(figsize=(1,1), dpi=200, frameon=False)
-# plt.xlim(-1,1)
-# plt.ylim(-1,1)
-# plt.axis('off')
-# fig.add_artist(e)
-# plt.show()
 
 def gridEll(ell, gridSize=200):
     fig = plt.figure(figsize=(1,1), dpi=gridSize, frameon=False)
@@ -88,26 +81,6 @@ def plotEll(ell, stepSize=200, output=True):
     plt.show()
     
 def generatePolygon(pointNum, smallestSize=10e-5, niceness=0.1, minRad=0.1, offCenter=True):
-    """
-    Parameters
-    ----------
-    pointNum : float
-        desired number of vertices -1
-    smallestSize : float, optional
-        a machine epsilon type thing to stay away from boundaries, optional
-        The default is 10e-5.
-    niceness : float, optional
-        has to do with the spikyness of the polygon, between 0 and pi, doesnt actually prevent spikyness 100% either
-    minRad : float, optional
-        try to stay this far away from boundary and try to let individual edges be at least this large
-    offCenter : bool, optional
-        if generate polygon with non-start-point (0,0). The default is True.
-    Returns
-    -------
-    points : array of float pairs
-        pointNum +2 vertices that in this order define the polygon
-        start and end point are the same
-    """
     phis = []
     phis.append(np.random.uniform(0, np.pi-niceness))
     for val in range(pointNum):
