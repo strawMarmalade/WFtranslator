@@ -71,7 +71,23 @@ def gridEll(ell, gridSize=200):
                           newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1))[:,:,0] < 255
     io_buf.close()
     plt.close(fig)
-    return grid
+    return np.transpose([np.flip(grid[:,val]) for val in range(gridSize)])
+
+def gridFromPolygon(poly, gridSize=200):
+    fig = plt.figure(figsize=(1,1), dpi=gridSize, frameon=False)
+    ax = fig.add_axes([0,0,1,1])
+    plt.xlim(-1,1)
+    plt.ylim(-1,1)
+    plt.axis('off')
+    ax.fill(poly[:,0],poly[:,1], "black")
+    io_buf = io.BytesIO()
+    fig.savefig(io_buf,format='raw', dpi=gridSize)
+    io_buf.seek(0)
+    grid = np.reshape(np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
+                          newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1))[:,:,0] < 255
+    io_buf.close()
+    plt.close(fig)
+    return np.transpose([np.flip(grid[:,val]) for val in range(gridSize)])
 
 def plotEll(ell, stepSize=200, output=True):
     fig, ax = plt.subplots(subplot_kw={'aspect': 'equal'})
@@ -90,23 +106,22 @@ def generatePolygon(pointNum, smallestSize=10e-5, niceness=0.1, minRad=0.1, offC
         phis.append(new)
     phis = np.sort(phis)
     if offCenter:
-        (x0,y0) =  np.random.uniform(-1+minRad, 1-minRad, 2)
         points = []
-        for val in range(pointNum):
-            maxRad = 1.0
-            phi = phis[val]
-            if (3/2)*np.pi<phi or phi<(1/2)*np.pi:
-                maxRad = np.min([1,(1-x0)*(np.cos(phi))**(-1)])
-            if (3/2)*np.pi>phi>(1/2)*np.pi:
-                maxRad = np.min([1,-(1+x0)*(np.cos(phi))**(-1)])
-            if 0<phi<np.pi:
-                maxRad = np.min([maxRad, (1-y0)*(np.sin(phi))**(-1)])
-            if np.pi<phi<2*np.pi:
-                maxRad = np.min([maxRad, -(1+y0)*(np.sin(phi))**(-1)])
-            rad = np.random.uniform(np.min([(maxRad-smallestSize)/2,minRad+smallestSize]),maxRad-smallestSize)
-            points.append((x0+rad*(np.cos(phis[val])),y0+rad*(np.sin(phis[val]))))
-        points.insert(0,(x0,y0))
-        points.append((x0,y0))
+        rads = np.random.uniform(smallestSize, 1-smallestSize, pointNum)
+        points2 = np.array([(rads[val]*np.cos(phis[val]),rads[val]*np.sin(phis[val])) for val in range(pointNum)])
+        minX = np.min(points2[:,0])
+        maxX = np.max(points2[:,0])
+        minY = np.min(points2[:,1])
+        maxY = np.max(points2[:,1])
+        
+        x0 = np.random.uniform(-np.min([1,1+minX]), np.min([1,1-maxX]))
+        y0 = np.random.uniform(-np.min([1,1+minY]), np.min([1,1-maxY]))
+        points2 += np.array([x0,y0])
+
+        points = [[x0,y0]]
+        points.extend([points2[j] for j in range(pointNum)])
+        points.append([x0,y0])
+        #points.append((x0,y0))
     else:
         rads = np.random.uniform(smallestSize+minRad, 1-smallestSize, pointNum)
         points = [(rads[val]*np.cos(phis[val]),rads[val]*np.sin(phis[val])) for val in range(pointNum)]
@@ -123,11 +138,9 @@ def checkIfPointInEllipse(p, ell):
             return True
     return False
 
-
 def drawGrid(grid):
     plt.imshow(grid, origin='lower') 
     plt.show()
-
 
 def drawPolygon(points, output=True):
     for val in range(len(points)-1):
@@ -137,33 +150,27 @@ def drawPolygon(points, output=True):
         plt.ylim(-1,1)
         plt.show()
 
-def pointToGridIndex(x,y,gridSize):
-    return [np.round((gridSize-1)/2*(x+1)).astype(int),np.round((gridSize-1)/2*(y+1)).astype(int)]
-
-def gridIndexToPoint(x,y,gridSize):
-    return np.array([2/(gridSize-1)*x-1,2/(gridSize-1)*y-1])
-
-def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360, method=4):
+def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360, altMethod=False):
     a = ell.get_width()/2
     b = ell.get_height()/2
     x0,y0 = ell.get_center()
     angle = np.deg2rad(ell.get_angle())
 
-    if method == 2:
+    if altMethod:
         t = np.linspace(-np.pi/2, 3/2*np.pi, angleAccuracy)
         Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle)+x0, a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)+y0])  
 
-        anglesOther2 = [360+np.rad2deg(angle+np.arctan2(np.tan(j)*a,b)) for j in np.linspace(-np.pi/2,np.pi/2, angleAccuracy//2)]
-        anglesOther2.extend([360+np.rad2deg(np.pi+angle+np.arctan(np.tan(j)*a/b)) for j in np.linspace(np.pi/2, 3/2*np.pi, angleAccuracy//2)])
-        anglesOther2[180] += 180
+        anglesOther2 = [rad2ang(angle+np.arctan2(np.tan(j)*a,b),angleAccuracy) for j in np.linspace(-np.pi/2,np.pi/2, angleAccuracy//2)]
+        anglesOther2.extend([rad2ang(np.pi+angle+np.arctan(np.tan(j)*a/b),angleAccuracy) for j in np.linspace(np.pi/2, 3/2*np.pi, angleAccuracy//2)])
+        anglesOther2[angleAccuracy//2] += angleAccuracy//2
         return [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[anglesOther2[j]]] for j in range(angleAccuracy)]
 
     else:
         t = np.linspace(0, 2*np.pi, angleAccuracy)
         Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle)+x0, a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)+y0])  
 
-        angle5 = [np.rad2deg(3/2*np.pi+np.arctan2(Ellrot[1,j+1]-Ellrot[1,j],Ellrot[0,j+1]-Ellrot[0,j])) for j in range(angleAccuracy-1)]
-        angle5.extend([np.rad2deg(3/2*np.pi+np.arctan2(Ellrot[1,-1]-Ellrot[1,-2],Ellrot[0,-1]-Ellrot[0,-2]))])
+        angle5 = [rad2ang(3/2*np.pi+np.arctan2(Ellrot[1,j+1]-Ellrot[1,j],Ellrot[0,j+1]-Ellrot[0,j]),angleAccuracy) for j in range(angleAccuracy-1)]
+        angle5.extend([rad2ang(3/2*np.pi+np.arctan2(Ellrot[1,-1]-Ellrot[1,-2],Ellrot[0,-1]-Ellrot[0,-2]),angleAccuracy)])
         return [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[angle5[j]]] for j in range(angleAccuracy)]
 
     
@@ -185,45 +192,7 @@ def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360, method=4):
     # #we allow the below things to divide by zero because
     # #arctan2 can handle when one of the parameters is infinity
     # #but I dont want to have to see the warnings so I supress them
-    # with warnings.catch_warnings():
-    #     warnings.simplefilter("ignore")
-    #     #angle3 = [np.rad2deg(np.arctan(Ellrot[1,j]/Ellrot[0,j]*calc(a,b,angle))) for j in range(angleAccuracy//2)]
-    #     #angle3.extend([np.rad2deg(np.pi+np.arctan(Ellrot[1,j]/Ellrot[0,j]*calc(a,b,angle))) for j in range(angleAccuracy//2,angleAccuracy)])
 
-    #     #anglesPlus = [j+np.rad2deg(angle) for j in range(angleAccuracy)]
-    #     anglesOther2 = [np.rad2deg(angle+np.arctan2(np.tan(j)*a,b)) for j in np.linspace(-np.pi/2,np.pi/2, angleAccuracy//2)]
-    #     anglesOther2.extend([np.rad2deg(np.pi+angle+np.arctan(np.tan(j)*a/b)) for j in np.linspace(np.pi/2, 3/2*np.pi, angleAccuracy//2)])
-
-    #     #
-    #     #anglesOther = [np.rad2deg(angle+np.arctan2(Ell[1,j]/(b**2),Ell[0,j]/(a**2))) for j in range(angleAccuracy)]
-    #     #anglesPlus = [np.round((angle+np.arctan2(1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for j in range(angleAccuracy//2)]
-    #     #anglesPlus.extend([np.round((angle+np.arctan2(-1,2*b*(a**(-2))*Ell[0,j]/(np.sqrt(1-(Ell[0,j]/a)**2))))*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy for j in range(angleAccuracy//2,angleAccuracy)])
-    
-    #     #angle4 = [np.rad2deg(np.arctan2(-1,calc2minus(a,b,angle, Ellrot[0,j]))) for j in range(angleAccuracy//2)]
-    #     #angle4.extend([np.rad2deg(np.arctan2(-1,calc2minus(a,b,angle, Ellrot[0,j]))) for j in range(angleAccuracy//2,angleAccuracy)])
-    
-    # angle5 = [np.rad2deg(3/2*np.pi+np.arctan2(Ellrot[1,j+1]-Ellrot[1,j],Ellrot[0,j+1]-Ellrot[0,j])) for j in range(angleAccuracy-1)]
-    # angle5.extend([np.rad2deg(3/2*np.pi+np.arctan2(Ellrot[1,-1]-Ellrot[1,-2],Ellrot[0,-1]-Ellrot[0,-2]))])
-    # #angle5.extend([np.rad2deg(3/2*np.pi+np.arctan((Ellrot[1,(j+1)%360]-Ellrot[1,j%360])/(Ellrot[0,(j+1)%360]-Ellrot[0,j%360]))) for j in range(angleAccuracy//2, angleAccuracy)])
-
-    # #anglediff = [angle5[j]-anglesOther2[j] for j in range(angleAccuracy)]
-    # # xnew = [x0+val for val in x]
-    
-    
-    # #method 1 is rubbish
-    # #method 3 is rubbish too
-    # if method == 3:
-    #     WFSetList = [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[angle3[j]]] for j in range(angleAccuracy)]
-    # elif method == 2:
-    #     WFSetList = [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[anglesOther2[j]]] for j in range(angleAccuracy)]
-    # elif method == 1:
-    #     WFSetList = [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[anglesPlus[j]]] for j in range(angleAccuracy)]
-    # elif method == 4:
-    #     WFSetList = [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[angle5[j]]] for j in range(angleAccuracy)]
-
-    # #WFSetList.extend([[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[anglesMinus[val]]] for j in range(angleAccuracy//2,angleAccuracy)]
-    
-    # return WFSetList
 
 def polygonToWFsetList(poly, gridSize=200, angleAccuracy=360):
     WFSetList = []
@@ -234,37 +203,26 @@ def polygonToWFsetList(poly, gridSize=200, angleAccuracy=360):
         awayPointLineMid = 0.5*poly[val+1]-0.5*poly[val]
         #arctan2 gives angle between -pi and pi 
         towardAngle = np.arctan2(towardPointLineMid[1],towardPointLineMid[0])
-        #outwardNormalTowardAngle = towardAngle-np.pi/2
-        #inwardNormalTowardAngle = towardAngle +np.pi/2
         awayAngle = np.arctan2(awayPointLineMid[1],awayPointLineMid[0])
         outwardNormalAwayAngle = awayAngle-np.pi/2
-        #inwardNormalAwayAngle = awayAngle+np.pi/2
         
-        #outwardWFStartAngle = np.round((outwardNormalTowardAngle)*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy
-        outwardWFEndAngle = np.round((outwardNormalAwayAngle)*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy
+        outwardWFEndAngle = rad2ang(outwardNormalAwayAngle, angleAccuracy)
         
-        # if outwardWFStartAngle< 0:
-        #     outwardWFStartAngle = outwardWFStartAngle+angleAccuracy
-        # if outwardWFEndAngle<0:
-        #     outwardWFEndAngle= outwardWFEndAngle+angleAccuracy
         #this adds the wavefront outward angle to each intermediate point between
         #the two vertices
-        distBetweenPoints = np.linalg.norm(poly[val]-poly[val+1])
-        interPoints = np.round((gridSize-1)/2*distBetweenPoints)
-        interPoints = interPoints.astype(int)
-        for k in range(interPoints+1):
-            stepTaken = poly[val]+k/interPoints*(poly[val+1]-poly[val])
-            stepTakenAsGrid = np.array(pointToGridIndex(stepTaken[0], stepTaken[1], gridSize))
-           # WFSetGrid[stepTakenAsGrid[0]][stepTakenAsGrid[1]][outwardWFEndAngle] = 1
-            WFSetList.append([stepTakenAsGrid,[outwardWFEndAngle]])
+        #distBetweenPoints = np.linalg.norm(poly[val]-poly[val+1])
+        interPoints = np.round((gridSize-1)/2*np.linalg.norm(poly[val]-poly[val+1])).astype(int)
+        #interPoints = interPoints.astype(int)
+        
         #the following list will be filled with every angle between the two outward pointing
         #angles from above which is the set of outward wavefront directions for a corner point
         #of a polygon     
+        WFSetList.extend([[point2grid(poly[val]+k/interPoints*(poly[val+1]-poly[val]), gridSize=gridSize),[outwardWFEndAngle]] for k in range(interPoints+1)])
         
-        pointAsGrid = np.array(pointToGridIndex(poly[val][0],poly[val][1],gridSize))
+        pointAsGrid = point2grid(poly[val],gridSize=gridSize)
         
-        towardAngleBackward = (int(angleAccuracy/2)+np.round((towardAngle)*angleAccuracy/(2*np.pi)).astype(int))%angleAccuracy
-        awayAngleDegrees = np.round((awayAngle)*angleAccuracy/(2*np.pi)).astype(int)%angleAccuracy
+        towardAngleBackward = (angleAccuracy//2+rad2ang(towardAngle,angleAccuracy))%angleAccuracy
+        awayAngleDegrees = rad2ang(awayAngle,angleAccuracy)
         if towardAngleBackward <= awayAngleDegrees:
             WFSetList.append([pointAsGrid,list(range(towardAngleBackward,awayAngleDegrees+1))])
         else:
@@ -289,9 +247,7 @@ def drawEllipseBoundary(ell, output=True):
         plt.ylim(-1,1)
         plt.show()
 
-
 def drawWFSetList(WFSetList,gridSize=200, saveFile=True, method=1):
-    #fig = plt.figure(figsize=(2,2), dpi=900)
     for val in range(len(WFSetList)):
         pointGrid = WFSetList[val][0]
         point = grid2point(pointGrid,gridSize)
@@ -299,7 +255,8 @@ def drawWFSetList(WFSetList,gridSize=200, saveFile=True, method=1):
         for angle in angles:
             #to plot the WFset we just make small lines in the correct direction
             #at the point
-            vec = [0.05*np.cos((2*np.pi*angle/360)), 0.05*np.sin((2*np.pi*angle/360))]
+            angleRad = np.deg2rad(angle)
+            vec = [0.05*np.cos(angleRad), 0.05*np.sin(angleRad)]
             plt.plot([point[0],point[0]+vec[0]],[point[1],point[1]+vec[1]],color='black',linewidth=0.3)
     plt.xlim(-1,1)
     plt.ylim(-1,1)
@@ -308,7 +265,7 @@ def drawWFSetList(WFSetList,gridSize=200, saveFile=True, method=1):
     plt.show()
 
 def convertWFListToWFGridLeoConvetion(List, gridSize=200, angleAccuracy=360):
-    LeoAngleAcc = int(angleAccuracy/2)
+    LeoAngleAcc = angleAccuracy//2
     WFSetGrid = np.zeros([gridSize,gridSize, int(LeoAngleAcc)])
     for val in List:
         point = val[0]
@@ -316,7 +273,7 @@ def convertWFListToWFGridLeoConvetion(List, gridSize=200, angleAccuracy=360):
         WFSetGrid[point[0],point[1], angleListHalf] = 1
     return WFSetGrid
 
-def newCheckIfInTriangle(p,xs):
+def checkIfPointInTriangle(p,xs):
     a = 1/2 * (-xs[1,1] * xs[2,0] + xs[0,1] * (-xs[1,0] + xs[2,0]) + xs[0,0] * (xs[1,1] - xs[2,1]) + xs[1,0] * xs[2,1])
     s = (xs[0,1]*xs[2,0] - xs[0,0]*xs[2,1] + (xs[2,1] - xs[0,1])*p[0] + (xs[0,0] - xs[2,0])*p[1])
     t = (xs[0,0]*xs[1,1] - xs[0,1]*xs[1,0] + (xs[0,1] - xs[1,1])*p[0] + (xs[1,0] - xs[0,0])*p[1])
@@ -330,25 +287,9 @@ def checkIfPointIsInPolygonNew2(p, poly):
         if np.min(xs[:,0]) <= p[0] <= np.max(xs[:,0]) and np.min(xs[:,1]) <= p[1] <= np.max(xs[:,1]):
         #the only polgons we can construct are star-convex so we just have to check for
         #all the triangles that make up the polygon
-            if newCheckIfInTriangle(p, xs):
+            if checkIfPointInTriangle(p, xs):
                 return True
     return False
-
-def gridFromPolygon(poly,gridSize=200):
-    dpi = int(gridSize/2)
-    fig = plt.figure(figsize=(2,2), dpi=dpi, frameon=False)
-    plt.xlim(-1,1)
-    plt.ylim(-1,1)
-    plt.axis('off')
-    plt.fill(poly[:,0],poly[:,1], "black")
-    io_buf = io.BytesIO()
-    fig.savefig(io_buf,format='raw', dpi=dpi)
-    io_buf.seek(0)
-    grid6 = np.reshape(np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
-                          newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1))[:,:,0] < 255
-    io_buf.close()
-    plt.close(fig)
-    return np.transpose([np.flip(grid6[:,val]) for val in range(gridSize)])
 
 
 def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
@@ -389,13 +330,13 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     print(f"Ellipse generation took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    WFSetList = ellipseToWFsetList(ell, gridSize=gridSize, angleAccuracy=angleAccuracy, method=2)
+    WFSetList = ellipseToWFsetList(ell, gridSize=gridSize, angleAccuracy=angleAccuracy)
     toc = time.perf_counter()
     print(f"Wavefrontset calculation took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
     drawEllipseBoundary(ell, output=False)
-    drawWFSetList(WFSetList, gridSize=gridSize, saveFile=False,method=4)
+    drawWFSetList(WFSetList, gridSize=gridSize, saveFile=False)
     toc = time.perf_counter()
     print(f"Plotting ellipse with wavefrontset picture took {toc - tic:0.4f} seconds")
     
@@ -405,246 +346,9 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     print(f"Get inside of ellipse as grid took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    plt.imshow(grid)
-    plt.show()
+    drawGrid(grid)
     toc = time.perf_counter()
     print(f"Drawing the grid of ellipse took {toc - tic:0.4f} seconds\n")
 
 fullPolygonRoutineTimer(polySize=5)
 fullEllipseRoutineTimer()
-
-
-# ell = generateEllipse()
-# drawEllipse(ell, output=False)
-# grid = constructImageInGridOfEllipse(ell)
-
-# print(radonTrafo(grid))
-
-
-# tic = time.perf_counter()
-# grid1 = polyGrid1(poly)
-# toc = time.perf_counter()
-# print(f"Way 1 took {toc - tic:0.4f} seconds\n")
-# tic = time.perf_counter()
-# grid2 = polyGrid2(poly)
-# toc = time.perf_counter()
-# print(f"Way 2 took {toc - tic:0.4f} seconds\n")
-# tic = time.perf_counter()
-# grid3 = polyGrid3(poly)
-# toc = time.perf_counter()
-# print(f"Way 3 took {toc - tic:0.4f} seconds\n")
-# tic = time.perf_counter()
-# grid4 = gridOfAllPointsInPolygon(poly, gridSize=200, angleAccuracy=360)
-# toc = time.perf_counter()
-# print(f"Old way took {toc - tic:0.4f} seconds\n")
-# tic = time.perf_counter()
-# grid5 = gridOfAllPointsInPolygon2(poly, gridSize=200, angleAccuracy=360)
-# toc = time.perf_counter()
-# print(f"Old new way took {toc - tic:0.4f} seconds\n")
-# tic = time.perf_counter()
-# fig = plt.figure(figsize=(2,2), dpi=100, frameon=False)
-# plt.xlim(-1,1)
-# plt.ylim(-1,1)
-# plt.axis('off')
-# plt.fill(poly[:,0],poly[:,1], "black")
-# io_buf = io.BytesIO()
-# fig.savefig(io_buf,format='raw', dpi=100)
-# io_buf.seek(0)
-# grid = np.reshape(np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
-#                       newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1))[:,:,0] < 255
-# grid = np.transpose([np.flip(grid[:,val]) for val in range(200)])
-# io_buf.close()
-# plt.close(fig)
-# plt.imshow(grid, origin='lower')
-# toc = time.perf_counter()
-# print(f"Matplotlib took {toc - tic:0.4f} seconds\n")
-
-
-#drawGrid(grid)
-# drawGrid(grid2)
-# drawGrid(grid3)
-# drawGrid(grid4)
-# drawGrid(grid5)
-
-
-
-
-# nums = 20
-# way1 = 0.0
-# way2 = 0.0
-# way3 = 0.0
-# way4 = 0.0
-# way5 = 0.0
-# way6 = 0.0
-# size = 1000
-# dp = int(size/2)
-# for k in range(nums):
-#     poly = generatePolygon(7)
-#     # tic = time.perf_counter()
-#     # grid1 = polyGrid1(poly)
-#     # toc = time.perf_counter()
-#     # way1 += toc - tic
-#     # print(f"Way 1 took {toc - tic:0.4f} seconds\n")
-#     # tic = time.perf_counter()
-#     # grid2 = polyGrid2(poly)
-#     # toc = time.perf_counter()
-#     # way2 += toc - tic
-#     # print(f"Way 2 took {toc - tic:0.4f} seconds\n")
-#     # tic = time.perf_counter()
-#     # grid3 = polyGrid3(poly)
-#     # toc = time.perf_counter()
-#     # way3 += toc - tic
-#     # print(f"Way 3 took {toc - tic:0.4f} seconds\n")
-#     # tic = time.perf_counter()
-#     # grid4 = gridOfAllPointsInPolygon(poly, gridSize=size, angleAccuracy=360)
-#     # toc = time.perf_counter()
-#     # way4 += toc - tic
-#     # print(f"Old way took {toc - tic:0.4f} seconds\n")
-#     tic = time.perf_counter()
-#     grid5 = gridOfAllPointsInPolygon2(poly, gridSize=size, angleAccuracy=360)
-#     toc = time.perf_counter()
-#     way5 += toc - tic
-#     print(f"Old new way took {toc - tic:0.4f} seconds\n")
-#     tic = time.perf_counter()
-#     fig = plt.figure(figsize=(2,2), dpi=dp, frameon=False)
-#     plt.xlim(-1,1)
-#     plt.ylim(-1,1)
-#     plt.axis('off')
-#     plt.fill(poly[:,0],poly[:,1], "black")
-#     io_buf = io.BytesIO()
-#     fig.savefig(io_buf,format='raw', dpi=dp)
-#     io_buf.seek(0)
-#     grid6 = np.reshape(np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
-#                           newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1))[:,:,0] < 255
-#     io_buf.close()
-#     grid6 = np.transpose([np.flip(grid6[:,val]) for val in range(200)])
-#     plt.close(fig)
-#     toc = time.perf_counter()
-#     way6 += toc - tic
-#     print(f"Pyplot took {toc - tic:0.4f} seconds\n")
-
-# way1 /= nums
-# way2 /= nums
-# way3 /= nums
-# way4 /= nums
-# way5 /= nums
-# way6 /= nums
-
-
-# print(f"Way 1: {way1:0.4f}\nWay 2: {way2:0.4f}\nWay 3: {way3:0.4f}\nWay 4: {way4:0.4f}\nWay 5: {way5:0.4f}\nWay 6: {way6:0.4f}")
-
-# Way 1: 2.7858
-# Way 2: 1.9747
-# Way 3: 2.0195
-# Way 4: 0.5225
-# Way 5: 0.4775
-# Way 6: 0.0105
-
-#so way 4 is the way to go
-# Way 1: 0.8512
-# Way 2: 0.5118
-# Way 3: 0.5232
-# Way 4: 0.3255
-# Way 5: 0.2634
-
-#size 5:
-# Way 1: 0.7245
-#  Way 2: 0.4681
-#  Way 3: 0.4778
-#  Way 4: 1.1108
-
-
-# ### Leo stuff
-# import math
-# import torch
-# # N = 201
-
-# # ImageWF = convertWFListToWFGridLeoConvetion(List, gridSize=201)
-# # #ImageWF = np.zeros([N, N, 180])
-
-# # #this block sets some test images for sanity check
-# # # j=0
-# # # while j <= N-1:
-# # #     ImageWF[j, 1, 0] = 1
-# # #     j = j+1
-
-
-# # #Actual code for WF mapping starts here
-
-# # #initializing sinogram WF
-# # SinoWF = np.zeros([N,180,180])
-# def canonicalplus1(r, alpha, phi):
-#     return (math.acos(r*math.cos(alpha - phi)) + phi)
-# def canonicalminus1(r, alpha, phi):
-#     return (-math.acos(r*math.cos(alpha - phi)) + phi)
-# def canonicalplus2(r, alpha, phi):
-#     return -math.asin(r*math.cos(alpha-phi)/2)
-# def canonicalminus2(r, alpha, phi):
-#     return math.asin(r*math.cos(alpha-phi)/2)
-# def traveltimeplus(r, alpha, phi):
-#     return math.sqrt(4 -(r* math.cos(alpha - phi))**2) - r*math.sin(alpha-phi)
-# def traveltimeminus(r, alpha, phi):
-#     return math.sqrt(4 -(r* math.cos(alpha - phi))**2) + r*math.sin(alpha-phi)
-# def pullback(rho, theta, phi, t):
-#     JMatrix = np.array([[-2* math.sin(rho) + t* math.sin(theta + rho), 2*math.cos(rho) - t* math.cos(theta+rho)],[ t*math.sin(theta+rho), -t*math.cos(theta+rho)]])
-#     ImageWFVect = np.array([math.cos(phi), math.sin(phi)])
-#     SinoWFVect = JMatrix.dot(ImageWFVect)
-#     #print(JMatrix)
-#     #print(SinoWFVect)
-# #    print(math.degrees(math.acos(SinoWFVect[0]/math.sqrt(SinoWFVect[0]**2 + SinoWFVect[1]**2))))
-#     return round(math.degrees(math.acos(SinoWFVect[0]/math.sqrt(SinoWFVect[0]**2 + SinoWFVect[1]**2))))
-
-
-
-
-# # rowindex = 0
-# # while (rowindex <= N-1):
-# #     colindex = 0
-# #     while (colindex <= N-1):
-# #         WFangleindex = 0
-# #         while (WFangleindex <= 179):
-# #             if ImageWF[rowindex, colindex, WFangleindex] ==1:
-# #                radius = math.sqrt((2*rowindex/(N-1) -1)**2 + (2*colindex/(N-1) - 1)**2)
-# #                #computes the distance of the pixel from the origin
-# #                if radius ==0:
-# #                    positionangle = 0
-# #                else:
-# #                    #print((2 * colindex / (N - 1) - 1) / radius)
-# #                    #print(math.acos((2 * colindex / (N - 1) - 1) / radius))
-# #                    positionangle = np.sign((2*rowindex/(N-1) -1))*math.acos((2 * colindex / (N - 1) - 1) / radius)
-# #                    if np.sign((2*rowindex/(N-1) -1))== 0:
-# #                        positionangle = math.acos((2 * colindex / (N - 1) - 1) / radius)
-# #                    #print(positionangle)
-# #                #positionangle is the angle of the position measured in Radians. It takes the range between -pi to pi
-# #                WFangleradian = math.radians(WFangleindex)
-# #                #turns WFangle from entry index to radians
-# #                boundaryradplus = canonicalplus1(radius, positionangle, WFangleradian)
-# #                #above function returns location on the boundary of circle in radians.
-# #                # So the range is a float between 0 and 2pi
-# #                boundarydegreeplus = math.degrees(boundaryradplus)
-# #                boundaryindexplus = round(boundarydegreeplus *N/360)%N
-# #                boundaryradminus = canonicalminus1(radius, positionangle, WFangleradian)
-# #                boundarydegreeminus = math.degrees(boundaryradminus)
-# #                boundaryindexminus = round(boundarydegreeminus *N/360)%N
-# #                incomingradplus = canonicalplus2(radius, positionangle, WFangleradian)
-# #                #above function returns incoming direction in radians relative to the inward pointing normal
-# #                #so the range is an integer between -pi/2 degrees to pi/2 degrees
-# #                incomingdegreeplus = math.degrees(incomingradplus)
-# #                incomingradminus = - incomingradplus
-# #                incomingdegreeminus = -incomingdegreeplus
-# #                incomingindexplus = round(incomingdegreeplus + 90)%180
-# #                incomingindexminus = round(incomingdegreeminus + 90)%180
-# #                tplus = traveltimeplus(radius, positionangle, WFangleradian)
-# #                tminus = traveltimeminus(radius, positionangle, WFangleradian)
-# #                SinoWFindexplus = pullback(boundaryradplus, incomingradplus, WFangleradian, tplus)
-# #                SinoWFindexminus = pullback(boundaryradminus, incomingradminus, WFangleradian, tminus)
-# #                SinoWF[boundaryindexplus, incomingindexplus, SinoWFindexplus] = 1
-# #                SinoWF[boundaryindexminus, incomingindexminus, SinoWFindexminus] = 1
-# #             WFangleindex = WFangleindex + 1
-# #         colindex = colindex + 1
-# #     rowindex = rowindex + 1        
-
-# # print(SinoWF)
-# # SinoWFtensor = torch.tensor(SinoWF)
-# # print(torch.nonzero(SinoWFtensor))
-    
