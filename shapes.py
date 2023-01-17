@@ -143,19 +143,6 @@ def pointToGridIndex(x,y,gridSize):
 def gridIndexToPoint(x,y,gridSize):
     return np.array([2/(gridSize-1)*x-1,2/(gridSize-1)*y-1])
 
-np.random.seed(107)
-
-def calc2plus(a,b,p,x):
-    return (np.sin(p)*np.cos(p)*(b**2-a**2)-2*x*a*b/np.sqrt((a*np.cos(p))**2+(b*np.sin(p))**2-x**2))/((a*np.cos(p))**2+(b*np.sin(p))**2)
-
-def calc2minus(a,b,p,x):
-    return (np.sin(p)*np.cos(p)*(b**2-a**2)+2*x*a*b/np.sqrt((a*np.cos(p))**2+(b*np.sin(p))**2-x**2))/((a*np.cos(p))**2+(b*np.sin(p))**2)
-
-
-def calc(a,b,p):
-    #return  (a*np.cos(t)*np.sin(p)+b*np.sin(t)*np.cos(p) +y0)/(a*np.cos(t)*np.cos(p)-b*np.sin(t)*np.sin(p)+x0)*(a**2*np.cos(p)-b**2*np.sin(p))/(b**2*np.cos(p)+a**2*np.sin(p))
-    return ((a**2)*np.cos(p)-(b**2)*np.sin(p))/((b**2)*np.cos(p)+(a**2)*np.sin(p))
-
 def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360, method=4):
     a = ell.get_width()/2
     b = ell.get_height()/2
@@ -288,7 +275,21 @@ def polygonToWFsetList(poly, gridSize=200, angleAccuracy=360):
         #when going to next point the one away line will turn into the toward line for the next point
         towardPointLineMid = awayPointLineMid
     return WFSetList
-             
+
+def drawEllipseBoundary(ell, output=True):
+    a = ell.get_width()/2
+    b = ell.get_height()/2
+    x0,y0 = ell.get_center()
+    angle = np.deg2rad(ell.get_angle())
+    t = np.linspace(0, 2*np.pi, 360)
+    Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle)+x0, a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)+y0])  
+    plt.plot(Ellrot[0,:],Ellrot[1,:])
+    if output:
+        plt.xlim(-1,1)
+        plt.ylim(-1,1)
+        plt.show()
+
+
 def drawWFSetList(WFSetList,gridSize=200, saveFile=True, method=1):
     #fig = plt.figure(figsize=(2,2), dpi=900)
     for val in range(len(WFSetList)):
@@ -393,7 +394,8 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     print(f"Wavefrontset calculation took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    drawWFSetList(WFSetList, gridSize=gridSize, saveFile=True,method=4)
+    drawEllipseBoundary(ell, output=False)
+    drawWFSetList(WFSetList, gridSize=gridSize, saveFile=False,method=4)
     toc = time.perf_counter()
     print(f"Plotting ellipse with wavefrontset picture took {toc - tic:0.4f} seconds")
     
@@ -406,9 +408,9 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     plt.imshow(grid)
     plt.show()
     toc = time.perf_counter()
-    print(f"Drawing the grid of polygon took {toc - tic:0.4f} seconds\n")
+    print(f"Drawing the grid of ellipse took {toc - tic:0.4f} seconds\n")
 
-#fullPolygonRoutineTimer(polySize=5)
+fullPolygonRoutineTimer(polySize=5)
 fullEllipseRoutineTimer()
 
 
