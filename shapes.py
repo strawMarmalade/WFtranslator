@@ -19,6 +19,12 @@ def point2grid(p,gridSize=200):
 
 def grid2point(p,gridSize=200):
     return np.array([-1,-1]+2/(gridSize-1)*p)
+
+def rad2ang(angle, angleAcc):
+    return np.round(angle/2/np.pi*angleAcc).astype(int)%angleAcc
+
+def ang2rad(angle, angleAcc):
+    return angle*2*np.pi/angleAcc
         
 def rot(theta):
     return np.array([[np.cos(theta), -np.sin(theta)], 
@@ -42,8 +48,10 @@ def genEll():
     maxX = 1-np.sqrt((a*np.cos(angle))**2+(b*np.sin(angle))**2)
     maxY = 1-np.sqrt((a*np.sin(angle))**2+(b*np.cos(angle))**2)
         
-    centerX = 0#np.random.uniform(-maxX,maxX)
-    centerY = 0#np.random.uniform(-maxY,maxY)
+    print(maxX,maxY)
+    
+    centerX = np.random.uniform(-maxX,maxX)
+    centerY = np.random.uniform(-maxY,maxY)
     
     center = np.array([centerX,centerY])
     return Ellipse(center, 2*a,2*b, angle=np.rad2deg(angle))
@@ -79,7 +87,59 @@ def plotEll(ell, stepSize=200, output=True):
     ax.add_artist(ell)
     plt.show()
     
-
+def generatePolygon(pointNum, smallestSize=10e-5, niceness=0.1, minRad=0.1, offCenter=True):
+    """
+    Parameters
+    ----------
+    pointNum : float
+        desired number of vertices -1
+    smallestSize : float, optional
+        a machine epsilon type thing to stay away from boundaries, optional
+        The default is 10e-5.
+    niceness : float, optional
+        has to do with the spikyness of the polygon, between 0 and pi, doesnt actually prevent spikyness 100% either
+    minRad : float, optional
+        try to stay this far away from boundary and try to let individual edges be at least this large
+    offCenter : bool, optional
+        if generate polygon with non-start-point (0,0). The default is True.
+    Returns
+    -------
+    points : array of float pairs
+        pointNum +2 vertices that in this order define the polygon
+        start and end point are the same
+    """
+    phis = []
+    phis.append(np.random.uniform(0, np.pi-niceness))
+    for val in range(pointNum):
+        new = phis[val]+np.random.uniform(niceness/2, np.pi-niceness)
+        if new>2*np.pi:
+            new -= 2*np.pi
+        phis.append(new)
+    phis = np.sort(phis)
+    if offCenter:
+        (x0,y0) =  np.random.uniform(-1+minRad, 1-minRad, 2)
+        points = []
+        for val in range(pointNum):
+            maxRad = 1.0
+            phi = phis[val]
+            if (3/2)*np.pi<phi or phi<(1/2)*np.pi:
+                maxRad = np.min([1,(1-x0)*(np.cos(phi))**(-1)])
+            if (3/2)*np.pi>phi>(1/2)*np.pi:
+                maxRad = np.min([1,-(1+x0)*(np.cos(phi))**(-1)])
+            if 0<phi<np.pi:
+                maxRad = np.min([maxRad, (1-y0)*(np.sin(phi))**(-1)])
+            if np.pi<phi<2*np.pi:
+                maxRad = np.min([maxRad, -(1+y0)*(np.sin(phi))**(-1)])
+            rad = np.random.uniform(np.min([(maxRad-smallestSize)/2,minRad+smallestSize]),maxRad-smallestSize)
+            points.append((x0+rad*(np.cos(phis[val])),y0+rad*(np.sin(phis[val]))))
+        points.insert(0,(x0,y0))
+        points.append((x0,y0))
+    else:
+        rads = np.random.uniform(smallestSize+minRad, 1-smallestSize, pointNum)
+        points = [(rads[val]*np.cos(phis[val]),rads[val]*np.sin(phis[val])) for val in range(pointNum)]
+        points.insert(0,(0,0))
+        points.append((x0,y0))
+    return np.array(points)
 
 #maybe wont work, i dunno
 def checkIfPointInEllipse(p, ell):
@@ -270,7 +330,7 @@ def drawWFSetList(WFSetList,gridSize=200, saveFile=True, method=1):
     plt.xlim(-1,1)
     plt.ylim(-1,1)
     if saveFile:
-        plt.savefig(f'fileAngle{method:d}.png',dpi=900)
+        plt.savefig('file.png',dpi=300)
     plt.show()
 
 def convertWFListToWFGridLeoConvetion(List, gridSize=200, angleAccuracy=360):
@@ -346,7 +406,7 @@ def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     toc = time.perf_counter()
     print(f"Drawing the grid of polygon took {toc - tic:0.4f} seconds\n")
 
-def fullEllipseRoutineTimer(gridSize = 800, angleAccuracy=360):   
+def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):   
     print(f"Grid size is {gridSize:d}")
 
     tic = time.perf_counter()
@@ -355,15 +415,12 @@ def fullEllipseRoutineTimer(gridSize = 800, angleAccuracy=360):
     print(f"Ellipse generation took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    WFSetList2 = ellipseToWFsetList(ell, gridSize=gridSize, angleAccuracy=360, method=2)
-    drawWFSetList(WFSetList2, gridSize=gridSize, saveFile=True,method=2)
+    WFSetList = ellipseToWFsetList(ell, gridSize=gridSize, angleAccuracy=angleAccuracy, method=2)
     toc = time.perf_counter()
     print(f"Wavefrontset calculation took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    WFSetList3 = ellipseToWFsetList(ell, gridSize=gridSize, angleAccuracy=360, method=4)
-    drawWFSetList(WFSetList3, gridSize=gridSize, saveFile=True,method=4)
-    #plotEll(ell, output=False)
+    drawWFSetList(WFSetList, gridSize=gridSize, saveFile=True,method=4)
     toc = time.perf_counter()
     print(f"Plotting ellipse with wavefrontset picture took {toc - tic:0.4f} seconds")
     
@@ -373,8 +430,8 @@ def fullEllipseRoutineTimer(gridSize = 800, angleAccuracy=360):
     print(f"Get inside of ellipse as grid took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    # plt.imshow(grid)
-    # plt.show()
+    plt.imshow(grid)
+    plt.show()
     toc = time.perf_counter()
     print(f"Drawing the grid of polygon took {toc - tic:0.4f} seconds\n")
 
