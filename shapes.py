@@ -71,6 +71,8 @@ def gridEll(ell, gridSize=200):
                           newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1))[:,:,0] < 255
     io_buf.close()
     plt.close(fig)
+    #the reason for the flip and transpose is cuz pyplot has its origin
+    #in the top left, and for the grid we have it in the bottom left
     return np.transpose([np.flip(grid[:,val]) for val in range(gridSize)])
 
 def gridFromPolygon(poly, gridSize=200):
@@ -143,8 +145,7 @@ def drawGrid(grid):
     plt.show()
 
 def drawPolygon(points, output=True):
-    for val in range(len(points)-1):
-        plt.plot([points[val][0],points[val+1][0]],[points[val][1],points[val+1][1]], color='blue')
+    plt.plot(points[:,0], points[:,1])
     if output:
         plt.xlim(-1,1)
         plt.ylim(-1,1)
@@ -247,7 +248,7 @@ def drawEllipseBoundary(ell, output=True):
         plt.ylim(-1,1)
         plt.show()
 
-def drawWFSetList(WFSetList,gridSize=200, saveFile=True, method=1):
+def drawWFSetList(WFSetList,gridSize=200, angleAccuracy=360, saveFile=True, method=1):
     for val in range(len(WFSetList)):
         pointGrid = WFSetList[val][0]
         point = grid2point(pointGrid,gridSize)
@@ -255,7 +256,7 @@ def drawWFSetList(WFSetList,gridSize=200, saveFile=True, method=1):
         for angle in angles:
             #to plot the WFset we just make small lines in the correct direction
             #at the point
-            angleRad = np.deg2rad(angle)
+            angleRad = ang2rad(angle, angleAccuracy)
             vec = [0.05*np.cos(angleRad), 0.05*np.sin(angleRad)]
             plt.plot([point[0],point[0]+vec[0]],[point[1],point[1]+vec[1]],color='black',linewidth=0.3)
     plt.xlim(-1,1)
@@ -280,7 +281,7 @@ def checkIfPointInTriangle(p,xs):
 
     return s > 0 and t > 0 and (s + t) < 2 * a
 
-def checkIfPointIsInPolygonNew2(p, poly):
+def checkIfPointIsInPolygon(p, poly):
     #as the first and last element in the list poly is the same starting point, we leave it away
     for index in range(1,len(poly)-2):
         xs = np.array([poly[0],poly[index],poly[index+1],poly[0]])
@@ -294,7 +295,7 @@ def checkIfPointIsInPolygonNew2(p, poly):
 
 def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     print(f"Polygon is of size {polySize:d} and grid size is {gridSize:d}")
-    
+
     tic = time.perf_counter()
     poly = generatePolygon(polySize)
     toc = time.perf_counter()
@@ -306,15 +307,15 @@ def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     print(f"Wavefrontset calculation took {toc - tic:0.4f} seconds")
     
     tic = time.perf_counter()
-    drawPolygon(poly, output=True)
-    drawWFSetList(WFSetList, gridSize=gridSize, saveFile=False)
+    drawPolygon(poly, output=False)
+    drawWFSetList(WFSetList, gridSize=gridSize, angleAccuracy=angleAccuracy, saveFile=False)
     toc = time.perf_counter()
     print(f"Plotting polygon with wavefrontset picture took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
     grid = gridFromPolygon(poly, gridSize=gridSize)
     toc = time.perf_counter()
-    print(f"Get inside of polygon way as grid took {toc - tic:0.4f} seconds")
+    print(f"Get inside of polygon as grid took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
     drawGrid(grid)
@@ -336,7 +337,7 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
 
     tic = time.perf_counter()
     drawEllipseBoundary(ell, output=False)
-    drawWFSetList(WFSetList, gridSize=gridSize, saveFile=False)
+    drawWFSetList(WFSetList, gridSize=gridSize, angleAccuracy=angleAccuracy, saveFile=False)
     toc = time.perf_counter()
     print(f"Plotting ellipse with wavefrontset picture took {toc - tic:0.4f} seconds")
     
