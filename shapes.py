@@ -30,31 +30,73 @@ def rot(theta):
     return np.array([[np.cos(theta), -np.sin(theta)], 
                          [np.sin(theta),  np.cos(theta)]])
 
+np.random.seed(62)
+
 def genEll():
     angle = np.random.uniform(-1,1)*np.pi/4
     
-    maxlen = np.sqrt(1+(np.tan(angle))**2)
-    a = np.random.uniform(0,maxlen)
-    with warnings.catch_warnings():
-        #I'm okay with dividing by zero here (which can only happen in maxb1)
-        #because that just means I take it to be infinity
-        warnings.simplefilter("ignore")
-        maxb1 = np.sqrt((1-(a*np.cos(angle))**2)/(np.sin(angle)**2))
-        maxb2 = np.sqrt((1-(a*np.sin(angle))**2)/(np.cos(angle)**2))
+    a, b = np.random.uniform(0,1, 2)
     
-    maxb = np.min([maxb1,maxb2])
+    angOfCenter = np.random.uniform(0,1)*2*np.pi
+    
+    maxX = np.sqrt((a*np.cos(angle))**2+(b*np.sin(angle))**2)
+    maxY = np.sqrt((a*np.sin(angle))**2+(b*np.cos(angle))**2)
+    
 
-    b = np.random.uniform(0,maxb)
     
-    #these are the maximal distances to border
-    maxX = 1-np.sqrt((a*np.cos(angle))**2+(b*np.sin(angle))**2)
-    maxY = 1-np.sqrt((a*np.sin(angle))**2+(b*np.cos(angle))**2)
-            
-    centerX = np.random.uniform(-maxX,maxX)
-    centerY = np.random.uniform(-maxY,maxY)
+    # plt.scatter([maxX],[maxY])
+    # plt.scatter([-maxX],[maxY])
+    # plt.scatter([maxX],[-maxY])
+    # plt.scatter([-maxX],[-maxY])
+    print(angle)
+    print(angOfCenter)
+    t = np.array([0+np.pi/4-angle,np.pi/2+np.pi/4-angle,np.pi+np.pi/4-angle,3/2*np.pi+np.pi/4-angle])
+    print(t)
+    aa = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle), a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)])  
+    t = np.array([0,np.pi/2,np.pi,3/2*np.pi])
+    bb = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle), a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)])  
+    print(t)
+    offset = angle
     
-    center = np.array([centerX,centerY])
-    return Ellipse(center, 2*a,2*b, angle=np.rad2deg(angle))
+    print(np.arctan2(-np.tan(-angle+angOfCenter)*b,a)+np.pi)
+
+    #plt.scatter(aa[0],aa[1])
+    
+    maxsa = np.array(np.abs(aa[0]*np.cos(angOfCenter)+aa[1]*np.sin(angOfCenter)+np.sqrt(1-(aa[0]*np.sin(angOfCenter)-aa[1]*np.cos(angOfCenter))**2)))
+    maxsb = np.array(np.abs(bb[0]*np.cos(angOfCenter)+bb[1]*np.sin(angOfCenter)+np.sqrt(1-(bb[0]*np.sin(angOfCenter)-bb[1]*np.cos(angOfCenter))**2)))
+
+    radCenter = np.min([np.min(maxsa),np.min(maxsb)])
+    
+    # valPlus = maxX*np.cos(angOfCenter)+maxY*np.sin(angOfCenter)
+    # valMinus = maxX*np.cos(angOfCenter)-maxY*np.sin(angOfCenter)
+    # with warnings.catch_warnings():
+    #     #I'm okay with dividing by zero here (which can only happen in maxb1)
+    #     #because that just means I take it to be infinity
+    #     warnings.simplefilter("ignore")
+    #     m1 = np.abs(valPlus+np.sqrt(1-(maxX*np.sin(angOfCenter)-maxY*np.cos(angOfCenter))**2))
+    #     m2 = np.abs(-valPlus+np.sqrt(1-(maxX*np.sin(angOfCenter)-maxY*np.cos(angOfCenter))**2))
+    #     m3 = np.abs(valMinus+np.sqrt(1-(maxX*np.sin(angOfCenter)+maxY*np.cos(angOfCenter))**2))
+    #     m4 = np.abs(-valMinus+np.sqrt(1-(maxX*np.sin(angOfCenter)+maxY*np.cos(angOfCenter))**2))
+
+    #     radCenter = 0#np.nanmin([m1,m2,m3,m4])#np.uniform.random(0,np.min([maxRad1,maxRad2]))
+    
+    # plt.scatter([maxX+radCenter*np.cos(angOfCenter)],[maxY+radCenter*np.sin(angOfCenter)])
+    # plt.scatter([-maxX+radCenter*np.cos(angOfCenter)],[maxY+radCenter*np.sin(angOfCenter)])
+    # plt.scatter([maxX+radCenter*np.cos(angOfCenter)],[-maxY+radCenter*np.sin(angOfCenter)])
+    # plt.scatter([-maxX+radCenter*np.cos(angOfCenter)],[-maxY+radCenter*np.sin(angOfCenter)])
+    
+    
+    center = np.array([radCenter*np.cos(angOfCenter),radCenter*np.sin(angOfCenter)])
+    plt.scatter(aa[0]+center[0],aa[1]+center[1])
+    plt.scatter(bb[0]+center[0],bb[1]+center[1])
+
+    return Ellipse(np.array([0,0]), 2*a,2*b, angle=np.rad2deg(angle))
+
+def plotUnitCircle():
+    t = np.linspace(0,2*np.pi, 360)
+    circ = np.array([np.cos(t), np.sin(t)])
+    
+    plt.plot(circ[0,:], circ[1,:])
 
 
 def gridEll(ell, gridSize=200):
@@ -111,13 +153,15 @@ def generatePolygon(pointNum, smallestSize=10e-5, niceness=0.1, minRad=0.1, offC
         points = []
         rads = np.random.uniform(smallestSize, 1-smallestSize, pointNum)
         points2 = np.array([(rads[val]*np.cos(phis[val]),rads[val]*np.sin(phis[val])) for val in range(pointNum)])
-        minX = np.min(points2[:,0])
-        maxX = np.max(points2[:,0])
-        minY = np.min(points2[:,1])
-        maxY = np.max(points2[:,1])
+
+        angOfCenter = np.random.uniform(0,1)*2*np.pi
+        maxs = np.array(points2[:,0]*np.cos(angOfCenter)+points2[:,1]*np.sin(angOfCenter)-np.sqrt(1-(points2[:,0]*np.sin(angOfCenter)-points2[:,1]*np.cos(angOfCenter))**2))
+
+        centerRad = np.min(np.abs(maxs))
         
-        x0 = np.random.uniform(-np.min([1,1+minX]), np.min([1,1-maxX]))
-        y0 = np.random.uniform(-np.min([1,1+minY]), np.min([1,1-maxY]))
+        x0 = centerRad*np.cos(angOfCenter)
+        y0 = centerRad*np.sin(angOfCenter)
+
         points2 += np.array([x0,y0])
 
         points = [[x0,y0]]
@@ -242,6 +286,9 @@ def drawEllipseBoundary(ell, output=True):
     angle = np.deg2rad(ell.get_angle())
     t = np.linspace(0, 2*np.pi, 360)
     Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle)+x0, a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)+y0])  
+    rads = np.array(np.sqrt(Ellrot[0]**2+Ellrot[1]**2))
+    print(np.max(rads))
+    print(t[np.argmax(rads)])
     plt.plot(Ellrot[0,:],Ellrot[1,:])
     if output:
         plt.xlim(-1,1)
@@ -307,6 +354,7 @@ def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     print(f"Wavefrontset calculation took {toc - tic:0.4f} seconds")
     
     tic = time.perf_counter()
+    plotUnitCircle()
     drawPolygon(poly, output=False)
     drawWFSetList(WFSetList, gridSize=gridSize, angleAccuracy=angleAccuracy, saveFile=False)
     toc = time.perf_counter()
@@ -318,7 +366,7 @@ def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     print(f"Get inside of polygon as grid took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    drawGrid(grid)
+    #drawGrid(grid)
     toc = time.perf_counter()
     print(f"Drawing the grid of polygon took {toc - tic:0.4f} seconds\n")
 
@@ -326,7 +374,7 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     print(f"Grid size is {gridSize:d}")
 
     tic = time.perf_counter()
-    ell = genEll()
+    ell = genEll() 
     toc = time.perf_counter()
     print(f"Ellipse generation took {toc - tic:0.4f} seconds")
 
@@ -336,6 +384,7 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     print(f"Wavefrontset calculation took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
+    plotUnitCircle()
     drawEllipseBoundary(ell, output=False)
     drawWFSetList(WFSetList, gridSize=gridSize, angleAccuracy=angleAccuracy, saveFile=False)
     toc = time.perf_counter()
@@ -347,9 +396,9 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     print(f"Get inside of ellipse as grid took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    drawGrid(grid)
+    #drawGrid(grid)
     toc = time.perf_counter()
     print(f"Drawing the grid of ellipse took {toc - tic:0.4f} seconds\n")
 
 fullPolygonRoutineTimer(polySize=5)
-fullEllipseRoutineTimer()
+#fullEllipseRoutineTimer()

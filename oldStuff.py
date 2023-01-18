@@ -512,3 +512,62 @@ def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360):
     #WFSetList.extend([[point2grid(np.array([x0+Ell_rot[0,j],y0+Ell_rot[1,j]])),[anglesMinus[val]]] for j in range(angleAccuracy//2,angleAccuracy)]
     
     return WFSetList
+
+def genEllinBox():
+    angle = np.random.uniform(-1,1)*np.pi/4
+    
+    maxlen = np.sqrt(1+(np.tan(angle))**2)
+    a = np.random.uniform(0,maxlen)
+    with warnings.catch_warnings():
+        #I'm okay with dividing by zero here (which can only happen in maxb1)
+        #because that just means I take it to be infinity
+        warnings.simplefilter("ignore")
+        maxb1 = np.sqrt((1-(a*np.cos(angle))**2)/(np.sin(angle)**2))
+        maxb2 = np.sqrt((1-(a*np.sin(angle))**2)/(np.cos(angle)**2))
+    
+    maxb = np.min([maxb1,maxb2])
+
+    b = np.random.uniform(0,maxb)
+    
+    #these are the maximal distances to border
+    maxX = 1-np.sqrt((a*np.cos(angle))**2+(b*np.sin(angle))**2)
+    maxY = 1-np.sqrt((a*np.sin(angle))**2+(b*np.cos(angle))**2)
+            
+    centerX = np.random.uniform(-maxX,maxX)
+    centerY = np.random.uniform(-maxY,maxY)
+    
+    center = np.array([centerX,centerY])
+    return Ellipse(center, 2*a,2*b, angle=np.rad2deg(angle))
+
+def generatePolygonInBox(pointNum, smallestSize=10e-5, niceness=0.1, minRad=0.1, offCenter=True):
+    phis = []
+    phis.append(np.random.uniform(0, np.pi-niceness))
+    for val in range(pointNum):
+        new = phis[val]+np.random.uniform(niceness/2, np.pi-niceness)
+        if new>2*np.pi:
+            new -= 2*np.pi
+        phis.append(new)
+    phis = np.sort(phis)
+    if offCenter:
+        points = []
+        rads = np.random.uniform(smallestSize, 1-smallestSize, pointNum)
+        points2 = np.array([(rads[val]*np.cos(phis[val]),rads[val]*np.sin(phis[val])) for val in range(pointNum)])
+        minX = np.min(points2[:,0])
+        maxX = np.max(points2[:,0])
+        minY = np.min(points2[:,1])
+        maxY = np.max(points2[:,1])
+        
+        x0 = np.random.uniform(-np.min([1,1+minX]), np.min([1,1-maxX]))
+        y0 = np.random.uniform(-np.min([1,1+minY]), np.min([1,1-maxY]))
+        points2 += np.array([x0,y0])
+
+        points = [[x0,y0]]
+        points.extend([points2[j] for j in range(pointNum)])
+        points.append([x0,y0])
+        #points.append((x0,y0))
+    else:
+        rads = np.random.uniform(smallestSize+minRad, 1-smallestSize, pointNum)
+        points = [(rads[val]*np.cos(phis[val]),rads[val]*np.sin(phis[val])) for val in range(pointNum)]
+        points.insert(0,(0,0))
+        points.append((x0,y0))
+    return np.array(points)
