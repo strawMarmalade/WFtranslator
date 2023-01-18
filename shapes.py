@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import warnings
 import io
 import time
+from scipy.optimize import fsolve
 from matplotlib.patches import Ellipse
 
 """
@@ -30,67 +31,68 @@ def rot(theta):
     return np.array([[np.cos(theta), -np.sin(theta)], 
                          [np.sin(theta),  np.cos(theta)]])
 
-np.random.seed(62)
+np.random.seed(54)
+
 
 def genEll():
     angle = np.random.uniform(-1,1)*np.pi/4
     
     a, b = np.random.uniform(0,1, 2)
     
-    angOfCenter = np.random.uniform(0,1)*2*np.pi
+    angOfCenter = 0#np.random.uniform(0,1)*2*np.pi
     
     maxX = np.sqrt((a*np.cos(angle))**2+(b*np.sin(angle))**2)
     maxY = np.sqrt((a*np.sin(angle))**2+(b*np.cos(angle))**2)
     
 
+    # # print(angle)
+    # # print(angOfCenter)
+    # # t = np.array([0+np.pi/4-angle,np.pi/2+np.pi/4-angle,np.pi+np.pi/4-angle,3/2*np.pi+np.pi/4-angle])
+    # # print(t)
+    # # aa = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle), a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)])  
+    # # t = np.array([0,np.pi/2,np.pi,3/2*np.pi])
+    # # bb = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle), a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)])  
+    # # print(t)
+    # # offset = angle
     
+    # # print(np.arctan2(-np.tan(-angle+angOfCenter)*b,a)+np.pi)
+
+    # #plt.scatter(aa[0],aa[1])
+    
+    # maxsa = np.array(np.abs(maxX*np.cos(angOfCenter)+maxY*np.sin(angOfCenter)-np.sqrt(1-(maxX*np.sin(angOfCenter)-maxY*np.cos(angOfCenter))**2)))
+    # #maxsb = np.array(np.abs(bb[0]*np.cos(angOfCenter)+bb[1]*np.sin(angOfCenter)+np.sqrt(1-(bb[0]*np.sin(angOfCenter)-bb[1]*np.cos(angOfCenter))**2)))
+
+    # radCenter = np.min(maxsa)
+    
+    valPlus = maxX*np.cos(angOfCenter)+maxY*np.sin(angOfCenter)
+    valMinus = maxX*np.cos(angOfCenter)-maxY*np.sin(angOfCenter)
+    with warnings.catch_warnings():
+        #I'm okay with dividing by zero here (which can only happen in maxb1)
+        #because that just means I take it to be infinity
+        warnings.simplefilter("ignore")
+        m1 = np.abs(valPlus+np.sqrt(1-(maxX*np.sin(angOfCenter)-maxY*np.cos(angOfCenter))**2))
+        m2 = np.abs(-valPlus+np.sqrt(1-(maxX*np.sin(angOfCenter)-maxY*np.cos(angOfCenter))**2))
+        m3 = np.abs(valMinus+np.sqrt(1-(maxX*np.sin(angOfCenter)+maxY*np.cos(angOfCenter))**2))
+        m4 = np.abs(-valMinus+np.sqrt(1-(maxX*np.sin(angOfCenter)+maxY*np.cos(angOfCenter))**2))
+
+        radCenter = np.nanmin([m1,m2,m3,m4])#np.uniform.random(0,np.min([maxRad1,maxRad2]))
+    
+    plt.scatter([maxX+radCenter*np.cos(angOfCenter)],[maxY+radCenter*np.sin(angOfCenter)])
+    plt.scatter([-maxX+radCenter*np.cos(angOfCenter)],[maxY+radCenter*np.sin(angOfCenter)])
+    plt.scatter([maxX+radCenter*np.cos(angOfCenter)],[-maxY+radCenter*np.sin(angOfCenter)])
+    plt.scatter([-maxX+radCenter*np.cos(angOfCenter)],[-maxY+radCenter*np.sin(angOfCenter)])
+    
+    
+    center = np.array([radCenter*np.cos(angOfCenter),radCenter*np.sin(angOfCenter)])
     # plt.scatter([maxX],[maxY])
     # plt.scatter([-maxX],[maxY])
     # plt.scatter([maxX],[-maxY])
     # plt.scatter([-maxX],[-maxY])
-    print(angle)
-    print(angOfCenter)
-    t = np.array([0+np.pi/4-angle,np.pi/2+np.pi/4-angle,np.pi+np.pi/4-angle,3/2*np.pi+np.pi/4-angle])
-    print(t)
-    aa = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle), a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)])  
-    t = np.array([0,np.pi/2,np.pi,3/2*np.pi])
-    bb = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle), a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)])  
-    print(t)
-    offset = angle
-    
-    print(np.arctan2(-np.tan(-angle+angOfCenter)*b,a)+np.pi)
 
-    #plt.scatter(aa[0],aa[1])
-    
-    maxsa = np.array(np.abs(aa[0]*np.cos(angOfCenter)+aa[1]*np.sin(angOfCenter)+np.sqrt(1-(aa[0]*np.sin(angOfCenter)-aa[1]*np.cos(angOfCenter))**2)))
-    maxsb = np.array(np.abs(bb[0]*np.cos(angOfCenter)+bb[1]*np.sin(angOfCenter)+np.sqrt(1-(bb[0]*np.sin(angOfCenter)-bb[1]*np.cos(angOfCenter))**2)))
+    #plt.scatter(aa[0]+center[0],aa[1]+center[1])
+    #plt.scatter(bb[0]+center[0],bb[1]+center[1])
 
-    radCenter = np.min([np.min(maxsa),np.min(maxsb)])
-    
-    # valPlus = maxX*np.cos(angOfCenter)+maxY*np.sin(angOfCenter)
-    # valMinus = maxX*np.cos(angOfCenter)-maxY*np.sin(angOfCenter)
-    # with warnings.catch_warnings():
-    #     #I'm okay with dividing by zero here (which can only happen in maxb1)
-    #     #because that just means I take it to be infinity
-    #     warnings.simplefilter("ignore")
-    #     m1 = np.abs(valPlus+np.sqrt(1-(maxX*np.sin(angOfCenter)-maxY*np.cos(angOfCenter))**2))
-    #     m2 = np.abs(-valPlus+np.sqrt(1-(maxX*np.sin(angOfCenter)-maxY*np.cos(angOfCenter))**2))
-    #     m3 = np.abs(valMinus+np.sqrt(1-(maxX*np.sin(angOfCenter)+maxY*np.cos(angOfCenter))**2))
-    #     m4 = np.abs(-valMinus+np.sqrt(1-(maxX*np.sin(angOfCenter)+maxY*np.cos(angOfCenter))**2))
-
-    #     radCenter = 0#np.nanmin([m1,m2,m3,m4])#np.uniform.random(0,np.min([maxRad1,maxRad2]))
-    
-    # plt.scatter([maxX+radCenter*np.cos(angOfCenter)],[maxY+radCenter*np.sin(angOfCenter)])
-    # plt.scatter([-maxX+radCenter*np.cos(angOfCenter)],[maxY+radCenter*np.sin(angOfCenter)])
-    # plt.scatter([maxX+radCenter*np.cos(angOfCenter)],[-maxY+radCenter*np.sin(angOfCenter)])
-    # plt.scatter([-maxX+radCenter*np.cos(angOfCenter)],[-maxY+radCenter*np.sin(angOfCenter)])
-    
-    
-    center = np.array([radCenter*np.cos(angOfCenter),radCenter*np.sin(angOfCenter)])
-    plt.scatter(aa[0]+center[0],aa[1]+center[1])
-    plt.scatter(bb[0]+center[0],bb[1]+center[1])
-
-    return Ellipse(np.array([0,0]), 2*a,2*b, angle=np.rad2deg(angle))
+    return Ellipse(center, 2*a,2*b, angle=np.rad2deg(angle))
 
 def plotUnitCircle():
     t = np.linspace(0,2*np.pi, 360)
@@ -157,7 +159,7 @@ def generatePolygon(pointNum, smallestSize=10e-5, niceness=0.1, minRad=0.1, offC
         angOfCenter = np.random.uniform(0,1)*2*np.pi
         maxs = np.array(points2[:,0]*np.cos(angOfCenter)+points2[:,1]*np.sin(angOfCenter)-np.sqrt(1-(points2[:,0]*np.sin(angOfCenter)-points2[:,1]*np.cos(angOfCenter))**2))
 
-        centerRad = np.min(np.abs(maxs))
+        centerRad = np.random.uniform(0,np.min(np.abs(maxs)))
         
         x0 = centerRad*np.cos(angOfCenter)
         y0 = centerRad*np.sin(angOfCenter)
@@ -366,7 +368,7 @@ def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     print(f"Get inside of polygon as grid took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    #drawGrid(grid)
+    drawGrid(grid)
     toc = time.perf_counter()
     print(f"Drawing the grid of polygon took {toc - tic:0.4f} seconds\n")
 
@@ -400,5 +402,5 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     toc = time.perf_counter()
     print(f"Drawing the grid of ellipse took {toc - tic:0.4f} seconds\n")
 
-fullPolygonRoutineTimer(polySize=5)
-#fullEllipseRoutineTimer()
+#fullPolygonRoutineTimer(polySize=5)
+fullEllipseRoutineTimer()
