@@ -148,13 +148,13 @@ def generatePolygon(pointNum, smallestSize=10e-5, niceness=0.1, minRad=0.1, offC
     return np.array(points)
 
 #maybe wont work, i dunno
-def checkIfPointInEllipse(p, ell):
-    center, angle, a, b = ell
-    pRotatedBack = rot(-angle)@(p-center)
-    if -a <= pRotatedBack[0] <= a:
-        if -b*np.sqrt(1-((pRotatedBack[0]/a))**2) <= pRotatedBack[1] <= b*np.sqrt(1-((pRotatedBack[0]/a))**2):
-            return True
-    return False
+# def checkIfPointInEllipse(p, ell):
+#     center, angle, a, b = ell
+#     pRotatedBack = rot(-angle)@(p-center)
+#     if -a <= pRotatedBack[0] <= a:
+#         if -b*np.sqrt(1-((pRotatedBack[0]/a))**2) <= pRotatedBack[1] <= b*np.sqrt(1-((pRotatedBack[0]/a))**2):
+#             return True
+#     return False
 
 def drawGrid(grid):
     plt.imshow(grid, origin='lower') 
@@ -215,11 +215,11 @@ def polygonToWFsetList(poly, gridSize=200, angleAccuracy=360):
     WFSetList = []
     #as the last element of the polygon is the first element, we look at the second last element
     #and take the edge from there to the first vertex
-    towardPointLineMid = 0.5*poly[0]-0.5*poly[-2]
+    #towardPointLineMid = 0.5*poly[0]-0.5*poly[-2]
     for val in range(len(poly)-1):
         awayPointLineMid = 0.5*poly[val+1]-0.5*poly[val]
         #arctan2 gives angle between -pi and pi 
-        towardAngle = np.arctan2(towardPointLineMid[1],towardPointLineMid[0])
+        #towardAngle = np.arctan2(towardPointLineMid[1],towardPointLineMid[0])
         awayAngle = np.arctan2(awayPointLineMid[1],awayPointLineMid[0])
         outwardNormalAwayAngle = awayAngle-np.pi/2
         
@@ -238,17 +238,19 @@ def polygonToWFsetList(poly, gridSize=200, angleAccuracy=360):
         
         pointAsGrid = point2grid(poly[val],gridSize=gridSize)
         
-        towardAngleBackward = (angleAccuracy//2+rad2ang(towardAngle,angleAccuracy))%angleAccuracy
-        awayAngleDegrees = rad2ang(awayAngle,angleAccuracy)
-        if towardAngleBackward <= awayAngleDegrees:
-            WFSetList.append([pointAsGrid,list(range(towardAngleBackward,awayAngleDegrees+1))])
-        else:
-            vals1 = list(range(towardAngleBackward,angleAccuracy))
-            vals1.extend(list(range(awayAngleDegrees+1)))
-            WFSetList.append([pointAsGrid,vals1])
+        WFSetList.append([pointAsGrid,list(range(0,angleAccuracy))])
+        
+        # towardAngleBackward = (angleAccuracy//2+rad2ang(towardAngle,angleAccuracy))%angleAccuracy
+        # awayAngleDegrees = rad2ang(awayAngle,angleAccuracy)
+        # if towardAngleBackward <= awayAngleDegrees:
+        #     WFSetList.append([pointAsGrid,list(range(towardAngleBackward,awayAngleDegrees+1))])
+        # else:
+        #     vals1 = list(range(towardAngleBackward,angleAccuracy))
+        #     vals1.extend(list(range(awayAngleDegrees+1)))
+        #     WFSetList.append([pointAsGrid,vals1])
 
         #when going to next point the one away line will turn into the toward line for the next point
-        towardPointLineMid = awayPointLineMid
+        #towardPointLineMid = awayPointLineMid
     return WFSetList
 
 def drawEllipseBoundary(ell, output=True):
@@ -308,7 +310,7 @@ def checkIfPointIsInPolygon(p, poly):
                 return True
     return False
 
-#
+
 def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     print(f"Polygon is of size {polySize:d} and grid size is {gridSize:d}")
 
