@@ -31,66 +31,36 @@ def rot(theta):
     return np.array([[np.cos(theta), -np.sin(theta)], 
                          [np.sin(theta),  np.cos(theta)]])
 
-np.random.seed(54)
-
-
-def genEll():
+def genEll(lowEffort = True):
     angle = np.random.uniform(-1,1)*np.pi/4
     
     a, b = np.random.uniform(0,1, 2)
-    
-    angOfCenter = 0#np.random.uniform(0,1)*2*np.pi
-    
-    maxX = np.sqrt((a*np.cos(angle))**2+(b*np.sin(angle))**2)
-    maxY = np.sqrt((a*np.sin(angle))**2+(b*np.cos(angle))**2)
-    
-
-    # # print(angle)
-    # # print(angOfCenter)
-    # # t = np.array([0+np.pi/4-angle,np.pi/2+np.pi/4-angle,np.pi+np.pi/4-angle,3/2*np.pi+np.pi/4-angle])
-    # # print(t)
-    # # aa = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle), a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)])  
-    # # t = np.array([0,np.pi/2,np.pi,3/2*np.pi])
-    # # bb = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle), a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)])  
-    # # print(t)
-    # # offset = angle
-    
-    # # print(np.arctan2(-np.tan(-angle+angOfCenter)*b,a)+np.pi)
-
-    # #plt.scatter(aa[0],aa[1])
-    
-    # maxsa = np.array(np.abs(maxX*np.cos(angOfCenter)+maxY*np.sin(angOfCenter)-np.sqrt(1-(maxX*np.sin(angOfCenter)-maxY*np.cos(angOfCenter))**2)))
-    # #maxsb = np.array(np.abs(bb[0]*np.cos(angOfCenter)+bb[1]*np.sin(angOfCenter)+np.sqrt(1-(bb[0]*np.sin(angOfCenter)-bb[1]*np.cos(angOfCenter))**2)))
-
-    # radCenter = np.min(maxsa)
-    
-    valPlus = maxX*np.cos(angOfCenter)+maxY*np.sin(angOfCenter)
-    valMinus = maxX*np.cos(angOfCenter)-maxY*np.sin(angOfCenter)
-    with warnings.catch_warnings():
-        #I'm okay with dividing by zero here (which can only happen in maxb1)
-        #because that just means I take it to be infinity
-        warnings.simplefilter("ignore")
-        m1 = np.abs(valPlus+np.sqrt(1-(maxX*np.sin(angOfCenter)-maxY*np.cos(angOfCenter))**2))
-        m2 = np.abs(-valPlus+np.sqrt(1-(maxX*np.sin(angOfCenter)-maxY*np.cos(angOfCenter))**2))
-        m3 = np.abs(valMinus+np.sqrt(1-(maxX*np.sin(angOfCenter)+maxY*np.cos(angOfCenter))**2))
-        m4 = np.abs(-valMinus+np.sqrt(1-(maxX*np.sin(angOfCenter)+maxY*np.cos(angOfCenter))**2))
-
-        radCenter = np.nanmin([m1,m2,m3,m4])#np.uniform.random(0,np.min([maxRad1,maxRad2]))
-    
-    plt.scatter([maxX+radCenter*np.cos(angOfCenter)],[maxY+radCenter*np.sin(angOfCenter)])
-    plt.scatter([-maxX+radCenter*np.cos(angOfCenter)],[maxY+radCenter*np.sin(angOfCenter)])
-    plt.scatter([maxX+radCenter*np.cos(angOfCenter)],[-maxY+radCenter*np.sin(angOfCenter)])
-    plt.scatter([-maxX+radCenter*np.cos(angOfCenter)],[-maxY+radCenter*np.sin(angOfCenter)])
-    
-    
-    center = np.array([radCenter*np.cos(angOfCenter),radCenter*np.sin(angOfCenter)])
-    # plt.scatter([maxX],[maxY])
-    # plt.scatter([-maxX],[maxY])
-    # plt.scatter([maxX],[-maxY])
-    # plt.scatter([-maxX],[-maxY])
-
-    #plt.scatter(aa[0]+center[0],aa[1]+center[1])
-    #plt.scatter(bb[0]+center[0],bb[1]+center[1])
+    if lowEffort:
+        maxX = np.sqrt((a*np.cos(angle))**2+(b*np.sin(angle))**2)
+        maxY = np.sqrt((a*np.sin(angle))**2+(b*np.cos(angle))**2)
+        
+        #this situation corresponds to the "limits" of the ellipse
+        #being outside the unit circle already so we wont shift the center
+        if (maxX-maxY)**2 > 1 or (maxX+maxY)**2 > 1:
+            radCenter = 0
+            center = np.array([0,0])
+        else:
+            angOfCenter = np.random.uniform(0,1)*2*np.pi
+            valPlus = maxX*np.cos(angOfCenter)+maxY*np.sin(angOfCenter)
+            valMinus = maxX*np.cos(angOfCenter)-maxY*np.sin(angOfCenter)
+            m1 = np.abs(valPlus+np.sqrt(1-(maxX*np.sin(angOfCenter)-maxY*np.cos(angOfCenter))**2))
+            m2 = np.abs(-valPlus+np.sqrt(1-(maxX*np.sin(angOfCenter)-maxY*np.cos(angOfCenter))**2))
+            m3 = np.abs(valMinus+np.sqrt(1-(maxX*np.sin(angOfCenter)+maxY*np.cos(angOfCenter))**2))
+            m4 = np.abs(-valMinus+np.sqrt(1-(maxX*np.sin(angOfCenter)+maxY*np.cos(angOfCenter))**2))
+            radCenter = np.random.uniform(0,np.min([m1,m2,m3,m4]))
+            center = np.array([radCenter*np.cos(angOfCenter),radCenter*np.sin(angOfCenter)])
+    else:
+        angOfCenter = np.random.uniform(0,1)*2*np.pi
+        t = np.linspace(0,2*np.pi,360)
+        Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle), a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)])  
+        maxs = np.array(Ellrot[0]*np.cos(angOfCenter)+Ellrot[1]*np.sin(angOfCenter)-np.sqrt(1-(Ellrot[0]*np.sin(angOfCenter)-Ellrot[1]*np.cos(angOfCenter))**2))
+        centerRad = np.random.uniform(0,np.min(np.abs(maxs)-10e-3))
+        center = np.array([centerRad*np.cos(angOfCenter),centerRad*np.sin(angOfCenter)])
 
     return Ellipse(center, 2*a,2*b, angle=np.rad2deg(angle))
 
@@ -287,10 +257,7 @@ def drawEllipseBoundary(ell, output=True):
     x0,y0 = ell.get_center()
     angle = np.deg2rad(ell.get_angle())
     t = np.linspace(0, 2*np.pi, 360)
-    Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle)+x0, a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)+y0])  
-    rads = np.array(np.sqrt(Ellrot[0]**2+Ellrot[1]**2))
-    print(np.max(rads))
-    print(t[np.argmax(rads)])
+    Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle)+x0, a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)+y0])
     plt.plot(Ellrot[0,:],Ellrot[1,:])
     if output:
         plt.xlim(-1,1)
@@ -378,7 +345,12 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     tic = time.perf_counter()
     ell = genEll() 
     toc = time.perf_counter()
-    print(f"Ellipse generation took {toc - tic:0.4f} seconds")
+    print(f"Low effort ellipse generation took {toc - tic:0.4f} seconds")
+    
+    tic = time.perf_counter()
+    ell = genEll(lowEffort= False) 
+    toc = time.perf_counter()
+    print(f"High effort ellipse generation took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
     WFSetList = ellipseToWFsetList(ell, gridSize=gridSize, angleAccuracy=angleAccuracy)
@@ -398,9 +370,9 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     print(f"Get inside of ellipse as grid took {toc - tic:0.4f} seconds")
 
     tic = time.perf_counter()
-    #drawGrid(grid)
+    drawGrid(grid)
     toc = time.perf_counter()
     print(f"Drawing the grid of ellipse took {toc - tic:0.4f} seconds\n")
 
-#fullPolygonRoutineTimer(polySize=5)
+fullPolygonRoutineTimer(polySize=5)
 fullEllipseRoutineTimer()
