@@ -308,7 +308,7 @@ def checkIfPointIsInPolygon(p, poly):
                 return True
     return False
 
-
+#
 def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     print(f"Polygon is of size {polySize:d} and grid size is {gridSize:d}")
 
