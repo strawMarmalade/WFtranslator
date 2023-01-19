@@ -497,8 +497,8 @@ def WFListToPairOfPics(WFSetList, N=201):
 def SheppLogShapeToData(shape, isPoly, N=201):
     if isPoly:
         WFSetList = polygonToWFsetList(shape, gridSize=N, angleAccuracy=360)
-        grid = gridFromPolygon(shape, gridSize=N)
+        grid = torch.tensor(gridFromPolygon(shape, gridSize=N))
     else:
         WFSetList = ellipseToWFsetList(shape, gridSize=N, angleAccuracy=360)
-        grid = gridEll(shape, gridSize=N)
+        grid = torch.tensor(gridEll(shape, gridSize=N))
     return (grid, WFListToPairOfPics(WFSetList, N))
