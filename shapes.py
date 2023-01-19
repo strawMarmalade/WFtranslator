@@ -494,17 +494,11 @@ def WFListToPairOfPics(WFSetList, N=201):
     SinoWF = getSinoWFFromList(WFSetList, N=N)
     return (WFSetGrid, SinoWF)
 
-
-# ell = genEll()
-# WFSetList = ellipseToWFsetList(ell, gridSize=N, angleAccuracy=360)
-# tic = time.perf_counter()
-# WFSetGrid = convertWFListToWFGridLeoConvention(WFSetList, gridSize=N, angleAccuracy=360)
-# SinoWFtensor = getSinoWF(WFSetGrid)
-# toc = time.perf_counter()
-# print(f"Grid method took {toc - tic:0.4f} seconds\n")
-# tic = time.perf_counter()
-# SinoWF = getSinoWFFromList(WFSetList)
-# toc = time.perf_counter()
-# print(f"List method took {toc - tic:0.4f} seconds\n")
-# print(torch.equal(SinoWFtensor, SinoWF))
-
+def SheppLogShapeToData(shape, isPoly, N=201):
+    if isPoly:
+        WFSetList = polygonToWFsetList(shape, gridSize=N, angleAccuracy=360)
+        grid = gridFromPolygon(shape, gridSize=N)
+    else:
+        WFSetList = ellipseToWFsetList(shape, gridSize=N, angleAccuracy=360)
+        grid = gridEll(shape, gridSize=N)
+    return (grid, WFListToPairOfPics(WFSetList, N))
