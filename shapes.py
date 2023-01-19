@@ -3,8 +3,10 @@ import matplotlib.pyplot as plt
 import warnings
 import io
 import time
-from scipy.optimize import fsolve
 from matplotlib.patches import Ellipse
+import math
+import torch
+
 
 """
 For a given gridSize (default 200),
@@ -13,7 +15,7 @@ we define the grid of points by
  -1]    n2]                 
 
 so that the index [n1,n2] is the point on the grid
-"""    
+"""
 
 def point2grid(p,gridSize=200):
     return np.round((p+np.array([1,1]))*(gridSize-1)/2).astype(int)
@@ -31,7 +33,7 @@ def rot(theta):
     return np.array([[np.cos(theta), -np.sin(theta)], 
                          [np.sin(theta),  np.cos(theta)]])
 
-def genEll(lowEffort = True):
+def genEll(lowEffort = False):
     angle = np.random.uniform(-1,1)*np.pi/4
     
     a, b = np.random.uniform(0,1, 2)
@@ -105,14 +107,15 @@ def gridFromPolygon(poly, gridSize=200):
     plt.close(fig)
     return np.transpose([np.flip(grid[:,val]) for val in range(gridSize)])
 
-def plotEll(ell, stepSize=200, output=True):
+def plotEll(ell, output=True):
     fig, ax = plt.subplots(subplot_kw={'aspect': 'equal'})
-    plt.xlim(-1,1)
-    plt.ylim(-1,1)
     ax.add_artist(ell)
-    plt.show()
-    
-def generatePolygon(pointNum, smallestSize=10e-5, niceness=0.1, minRad=0.1, offCenter=True):
+    if output:
+        plt.xlim(-1,1)
+        plt.ylim(-1,1)
+        plt.show()
+
+def generatePolygon(pointNum, offCenter=True, smallestSize=10e-5, niceness=0.1):
     phis = []
     phis.append(np.random.uniform(0, np.pi-niceness))
     for val in range(pointNum):
@@ -121,30 +124,26 @@ def generatePolygon(pointNum, smallestSize=10e-5, niceness=0.1, minRad=0.1, offC
             new -= 2*np.pi
         phis.append(new)
     phis = np.sort(phis)
-    if offCenter:
-        points = []
-        rads = np.random.uniform(smallestSize, 1-smallestSize, pointNum)
-        points2 = np.array([(rads[val]*np.cos(phis[val]),rads[val]*np.sin(phis[val])) for val in range(pointNum)])
 
+    points = []
+    rads = np.random.uniform(smallestSize, 1-smallestSize, pointNum)
+    points2 = np.array([(rads[val]*np.cos(phis[val]),rads[val]*np.sin(phis[val])) for val in range(pointNum)])
+    if offCenter:
         angOfCenter = np.random.uniform(0,1)*2*np.pi
         maxs = np.array(points2[:,0]*np.cos(angOfCenter)+points2[:,1]*np.sin(angOfCenter)-np.sqrt(1-(points2[:,0]*np.sin(angOfCenter)-points2[:,1]*np.cos(angOfCenter))**2))
-
+    
         centerRad = np.random.uniform(0,np.min(np.abs(maxs)))
         
         x0 = centerRad*np.cos(angOfCenter)
         y0 = centerRad*np.sin(angOfCenter)
-
-        points2 += np.array([x0,y0])
-
-        points = [[x0,y0]]
-        points.extend([points2[j] for j in range(pointNum)])
-        points.append([x0,y0])
-        #points.append((x0,y0))
     else:
-        rads = np.random.uniform(smallestSize+minRad, 1-smallestSize, pointNum)
-        points = [(rads[val]*np.cos(phis[val]),rads[val]*np.sin(phis[val])) for val in range(pointNum)]
-        points.insert(0,(0,0))
-        points.append((x0,y0))
+        x0 = 0
+        y0 =0
+    points2 += np.array([x0,y0])
+
+    points = [[x0,y0]]
+    points.extend([points2[j] for j in range(pointNum)])
+    points.append([x0,y0])
     return np.array(points)
 
 #maybe wont work, i dunno
@@ -181,14 +180,12 @@ def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360, altMethod=False):
         anglesOther2.extend([rad2ang(np.pi+angle+np.arctan(np.tan(j)*a/b),angleAccuracy) for j in np.linspace(np.pi/2, 3/2*np.pi, angleAccuracy//2)])
         anglesOther2[angleAccuracy//2] += angleAccuracy//2
         return [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[anglesOther2[j]]] for j in range(angleAccuracy)]
+    t = np.linspace(0, 2*np.pi, angleAccuracy)
+    Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle)+x0, a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)+y0])  
 
-    else:
-        t = np.linspace(0, 2*np.pi, angleAccuracy)
-        Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle)+x0, a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)+y0])  
-
-        angle5 = [rad2ang(3/2*np.pi+np.arctan2(Ellrot[1,j+1]-Ellrot[1,j],Ellrot[0,j+1]-Ellrot[0,j]),angleAccuracy) for j in range(angleAccuracy-1)]
-        angle5.extend([rad2ang(3/2*np.pi+np.arctan2(Ellrot[1,-1]-Ellrot[1,-2],Ellrot[0,-1]-Ellrot[0,-2]),angleAccuracy)])
-        return [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[angle5[j]]] for j in range(angleAccuracy)]
+    angle5 = [rad2ang(3/2*np.pi+np.arctan2(Ellrot[1,j+1]-Ellrot[1,j],Ellrot[0,j+1]-Ellrot[0,j]),angleAccuracy) for j in range(angleAccuracy-1)]
+    angle5.extend([rad2ang(3/2*np.pi+np.arctan2(Ellrot[1,-1]-Ellrot[1,-2],Ellrot[0,-1]-Ellrot[0,-2]),angleAccuracy)])
+    return [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[angle5[j]]] for j in range(angleAccuracy)]
 
     
     # #both of these calculate the rotated ellipse and are almost equally fast...
@@ -266,7 +263,7 @@ def drawEllipseBoundary(ell, output=True):
         plt.ylim(-1,1)
         plt.show()
 
-def drawWFSetList(WFSetList,gridSize=200, angleAccuracy=360, saveFile=True, method=1):
+def drawWFSetList(WFSetList,gridSize=200, angleAccuracy=360, saveFile=True):
     for val in range(len(WFSetList)):
         pointGrid = WFSetList[val][0]
         point = grid2point(pointGrid,gridSize)
@@ -283,9 +280,9 @@ def drawWFSetList(WFSetList,gridSize=200, angleAccuracy=360, saveFile=True, meth
         plt.savefig('file.png',dpi=300)
     plt.show()
 
-def convertWFListToWFGridLeoConvetion(List, gridSize=200, angleAccuracy=360):
+def convertWFListToWFGridLeoConvention(List, gridSize=200, angleAccuracy=360):
     LeoAngleAcc = angleAccuracy//2
-    WFSetGrid = np.zeros([gridSize,gridSize, int(LeoAngleAcc)])
+    WFSetGrid = np.zeros([gridSize,gridSize, LeoAngleAcc])
     for val in List:
         point = val[0]
         angleListHalf = [ang%LeoAngleAcc for ang in val[1]]
@@ -376,5 +373,138 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     toc = time.perf_counter()
     print(f"Drawing the grid of ellipse took {toc - tic:0.4f} seconds\n")
 
-fullPolygonRoutineTimer(polySize=5)
-fullEllipseRoutineTimer()
+
+def canonicalplus1(r, alpha, phi):
+    return (math.acos(r*math.cos(alpha - phi)) + phi)
+def canonicalminus1(r, alpha, phi):
+    return (-math.acos(r*math.cos(alpha - phi)) + phi)
+def canonicalplus2(r, alpha, phi):
+    return -math.asin(r*math.cos(alpha-phi)/2)
+def canonicalminus2(r, alpha, phi):
+    return math.asin(r*math.cos(alpha-phi)/2)
+def traveltimeplus(r, alpha, phi):
+    return math.sqrt(4 -(r* math.cos(alpha - phi))**2) - r*math.sin(alpha-phi)
+def traveltimeminus(r, alpha, phi):
+    return math.sqrt(4 -(r* math.cos(alpha - phi))**2) + r*math.sin(alpha-phi)
+def pullback(rho, theta, phi, t):
+    JMatrix = np.array([[-2* math.sin(rho) + t* math.sin(theta + rho), 2*math.cos(rho) - t* math.cos(theta+rho)],[ t*math.sin(theta+rho), -t*math.cos(theta+rho)]])
+    ImageWFVect = np.array([math.cos(phi), math.sin(phi)])
+    SinoWFVect = JMatrix.dot(ImageWFVect)
+    return round(math.degrees(math.acos(SinoWFVect[0]/math.sqrt(SinoWFVect[0]**2 + SinoWFVect[1]**2))))
+
+def getSinoWF(ImageWF, N=201):
+    SinoWF = np.zeros([N,180,180])
+    rowindex = 0
+    while (rowindex <= N-1):
+        colindex = 0
+        while (colindex <= N-1):
+            WFangleindex = 0
+            while (WFangleindex <= 179):
+                if ImageWF[rowindex, colindex, WFangleindex] ==1:
+                   radius = math.sqrt((2*rowindex/(N-1) -1)**2 + (2*colindex/(N-1) - 1)**2)
+                   #computes the distance of the pixel from the origin
+                   if radius ==0:
+                       positionangle = 0
+                   else:
+                       #print((2 * colindex / (N - 1) - 1) / radius)
+                       #print(math.acos((2 * colindex / (N - 1) - 1) / radius))
+                       positionangle = np.sign((2*rowindex/(N-1) -1))*math.acos((2 * colindex / (N - 1) - 1) / radius)
+                       if np.sign((2*rowindex/(N-1) -1))== 0:
+                           positionangle = math.acos((2 * colindex / (N - 1) - 1) / radius)
+                       #print(positionangle)
+                   #positionangle is the angle of the position measured in Radians. It takes the range between -pi to pi
+                   WFangleradian = math.radians(WFangleindex)
+                   #turns WFangle from entry index to radians
+                   boundaryradplus = canonicalplus1(radius, positionangle, WFangleradian)
+                   #above function returns location on the boundary of circle in radians.
+                   # So the range is a float between 0 and 2pi
+                   boundarydegreeplus = math.degrees(boundaryradplus)
+                   boundaryindexplus = round(boundarydegreeplus *N/360)%N
+                   boundaryradminus = canonicalminus1(radius, positionangle, WFangleradian)
+                   boundarydegreeminus = math.degrees(boundaryradminus)
+                   boundaryindexminus = round(boundarydegreeminus *N/360)%N
+                   incomingradplus = canonicalplus2(radius, positionangle, WFangleradian)
+                   #above function returns incoming direction in radians relative to the inward pointing normal
+                   #so the range is an integer between -pi/2 degrees to pi/2 degrees
+                   incomingdegreeplus = math.degrees(incomingradplus)
+                   incomingradminus = - incomingradplus
+                   incomingdegreeminus = -incomingdegreeplus
+                   incomingindexplus = round(incomingdegreeplus + 90)%180
+                   incomingindexminus = round(incomingdegreeminus + 90)%180
+                   tplus = traveltimeplus(radius, positionangle, WFangleradian)
+                   tminus = traveltimeminus(radius, positionangle, WFangleradian)
+                   SinoWFindexplus = pullback(boundaryradplus, incomingradplus, WFangleradian, tplus)
+                   SinoWFindexminus = pullback(boundaryradminus, incomingradminus, WFangleradian, tminus)
+                   SinoWF[boundaryindexplus, incomingindexplus, SinoWFindexplus] = 1
+                   SinoWF[boundaryindexminus, incomingindexminus, SinoWFindexminus] = 1
+                WFangleindex = WFangleindex + 1
+            colindex = colindex + 1
+        rowindex = rowindex + 1
+    return torch.tensor(SinoWF)
+
+def getSinoWFFromList(WFList, N=201):
+    SinoWF = np.zeros([N,180,180])
+    for val in WFList:
+        pointGrid = val[0]
+        angles = [ang%180 for ang in val[1]]
+        rowindex = pointGrid[0]
+        colindex = pointGrid[1]
+        radius = math.sqrt((2*rowindex/(N-1) -1)**2 + (2*colindex/(N-1) - 1)**2)
+        #computes the distance of the pixel from the origin
+        if radius ==0:
+            positionangle = 0
+        else:
+            #print((2 * colindex / (N - 1) - 1) / radius)
+            #print(math.acos((2 * colindex / (N - 1) - 1) / radius))
+            positionangle = np.sign((2*rowindex/(N-1) -1))*math.acos((2 * colindex / (N - 1) - 1) / radius)
+            if np.sign((2*rowindex/(N-1) -1))== 0:
+                positionangle = math.acos((2 * colindex / (N - 1) - 1) / radius)
+        for WFangleindex in angles:
+            #print(positionangle)
+            #positionangle is the angle of the position measured in Radians. It takes the range between -pi to pi
+            WFangleradian = math.radians(WFangleindex)
+            #turns WFangle from entry index to radians
+            boundaryradplus = canonicalplus1(radius, positionangle, WFangleradian)
+            #above function returns location on the boundary of circle in radians.
+            # So the range is a float between 0 and 2pi
+            boundarydegreeplus = math.degrees(boundaryradplus)
+            boundaryindexplus = round(boundarydegreeplus *N/360)%N
+            boundaryradminus = canonicalminus1(radius, positionangle, WFangleradian)
+            boundarydegreeminus = math.degrees(boundaryradminus)
+            boundaryindexminus = round(boundarydegreeminus *N/360)%N
+            incomingradplus = canonicalplus2(radius, positionangle, WFangleradian)
+            #above function returns incoming direction in radians relative to the inward pointing normal
+            #so the range is an integer between -pi/2 degrees to pi/2 degrees
+            incomingdegreeplus = math.degrees(incomingradplus)
+            incomingradminus = - incomingradplus
+            incomingdegreeminus = -incomingdegreeplus
+            incomingindexplus = round(incomingdegreeplus + 90)%180
+            incomingindexminus = round(incomingdegreeminus + 90)%180
+            tplus = traveltimeplus(radius, positionangle, WFangleradian)
+            tminus = traveltimeminus(radius, positionangle, WFangleradian)
+            SinoWFindexplus = pullback(boundaryradplus, incomingradplus, WFangleradian, tplus)
+            SinoWFindexminus = pullback(boundaryradminus, incomingradminus, WFangleradian, tminus)
+            SinoWF[boundaryindexplus, incomingindexplus, SinoWFindexplus] = 1
+            SinoWF[boundaryindexminus, incomingindexminus, SinoWFindexminus] = 1
+    return torch.tensor(SinoWF)
+
+
+def WFListToPairOfPics(WFSetList, N=201):
+    WFSetGrid = torch.tensor(convertWFListToWFGridLeoConvention(WFSetList, gridSize=N, angleAccuracy=360))
+    SinoWF = getSinoWFFromList(WFSetList, N=N)
+    return (WFSetGrid, SinoWF)
+
+
+# ell = genEll()
+# WFSetList = ellipseToWFsetList(ell, gridSize=N, angleAccuracy=360)
+# tic = time.perf_counter()
+# WFSetGrid = convertWFListToWFGridLeoConvention(WFSetList, gridSize=N, angleAccuracy=360)
+# SinoWFtensor = getSinoWF(WFSetGrid)
+# toc = time.perf_counter()
+# print(f"Grid method took {toc - tic:0.4f} seconds\n")
+# tic = time.perf_counter()
+# SinoWF = getSinoWFFromList(WFSetList)
+# toc = time.perf_counter()
+# print(f"List method took {toc - tic:0.4f} seconds\n")
+# print(torch.equal(SinoWFtensor, SinoWF))
+
