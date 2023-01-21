@@ -114,7 +114,7 @@ def submanifoldInterpolation(n, r, X):
     graph = np.zeros((s,s), dtype=bool)
     for j in range(s):
         for i in range(j):
-            val = np.linalg.norm(X[i]-X[j]) <= 1/100
+            val = np.linalg.norm(X[i]-X[j]) >= 1/100
             graph[i,j] = val
             graph[j,i] = val
     G = nx.Graph(graph)
@@ -151,11 +151,16 @@ def kPointsAroundEachxinXwithf(X, f, k, delta):
     fs = [f(p) for p in points]
     return (points, fs)
         
-X = np.reshape(np.random.uniform(0,1,6000), (1000,6))
-x0 = np.random.uniform(0,1,6)
+X = np.reshape(np.random.uniform(0,1,8000), (1000,8))
+x0 = np.random.uniform(0,1,8)
 
 tic = time.perf_counter()
-submanifoldInterpolation(4, 1/100, X)
+q = findDisc(x0, X, 60)
 toc = time.perf_counter()
 print(f"Submanifold find took {toc - tic:0.4f} seconds\n")
+
+# tic = time.perf_counter()
+# submanifoldInterpolation(4, 1/100, X)
+# toc = time.perf_counter()
+# print(f"Submanifold find took {toc - tic:0.4f} seconds\n")
 

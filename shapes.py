@@ -373,6 +373,9 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     toc = time.perf_counter()
     print(f"Drawing the grid of ellipse took {toc - tic:0.4f} seconds\n")
 
+#%%
+fullEllipseRoutineTimer()
+
 def canonicalplus1(r, alpha, phi):
     return (math.acos(r*math.cos(alpha - phi)) + phi)
 def canonicalminus1(r, alpha, phi):
