@@ -176,16 +176,16 @@ def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360, altMethod=False):
         t = np.linspace(-np.pi/2, 3/2*np.pi, angleAccuracy)
         Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle)+x0, a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)+y0])  
 
-        anglesOther2 = [rad2ang(angle+np.arctan2(np.tan(j)*a,b),angleAccuracy) for j in np.linspace(-np.pi/2,np.pi/2, angleAccuracy//2)]
-        anglesOther2.extend([rad2ang(np.pi+angle+np.arctan(np.tan(j)*a/b),angleAccuracy) for j in np.linspace(np.pi/2, 3/2*np.pi, angleAccuracy//2)])
-        anglesOther2[angleAccuracy//2] += angleAccuracy//2
-        return [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[anglesOther2[j]]] for j in range(angleAccuracy)]
+        angles = [rad2ang(angle+np.arctan2(np.tan(j)*a,b),angleAccuracy) for j in np.linspace(-np.pi/2,np.pi/2, angleAccuracy//2)]
+        angles.extend([rad2ang(np.pi+angle+np.arctan(np.tan(j)*a/b),angleAccuracy) for j in np.linspace(np.pi/2, 3/2*np.pi, angleAccuracy//2)])
+        angles[angleAccuracy//2] += angleAccuracy//2
+        return [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[angles[j]]] for j in range(angleAccuracy)]
     t = np.linspace(0, 2*np.pi, angleAccuracy)
     Ellrot = np.array([a*np.cos(t)*np.cos(angle)-b*np.sin(t)*np.sin(angle)+x0, a*np.cos(t)*np.sin(angle)+b*np.sin(t)*np.cos(angle)+y0])  
 
-    angle5 = [rad2ang(3/2*np.pi+np.arctan2(Ellrot[1,j+1]-Ellrot[1,j],Ellrot[0,j+1]-Ellrot[0,j]),angleAccuracy) for j in range(angleAccuracy-1)]
-    angle5.extend([rad2ang(3/2*np.pi+np.arctan2(Ellrot[1,-1]-Ellrot[1,-2],Ellrot[0,-1]-Ellrot[0,-2]),angleAccuracy)])
-    return [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[angle5[j]]] for j in range(angleAccuracy)]
+    angles = [rad2ang(3/2*np.pi+np.arctan2(Ellrot[1,j+1]-Ellrot[1,j],Ellrot[0,j+1]-Ellrot[0,j]),angleAccuracy) for j in range(angleAccuracy-1)]
+    angles.extend([rad2ang(3/2*np.pi+np.arctan2(Ellrot[1,-1]-Ellrot[1,-2],Ellrot[0,-1]-Ellrot[0,-2]),angleAccuracy)])
+    return [[point2grid(np.array([Ellrot[0,j],Ellrot[1,j]]),gridSize=gridSize),[angles[j]]] for j in range(angleAccuracy)]
 
     
     # #both of these calculate the rotated ellipse and are almost equally fast...
@@ -372,7 +372,6 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     drawGrid(grid)
     toc = time.perf_counter()
     print(f"Drawing the grid of ellipse took {toc - tic:0.4f} seconds\n")
-
 
 def canonicalplus1(r, alpha, phi):
     return (math.acos(r*math.cos(alpha - phi)) + phi)
