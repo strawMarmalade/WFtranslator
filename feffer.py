@@ -2,6 +2,7 @@ import numpy as np
 import scipy.linalg as la
 import time
 import networkx as nx
+import os
 
 def mu(x,q):
     #p. 29
@@ -104,29 +105,71 @@ def submanifoldInterpolation(n, r, X):
     #step 1.
     tic = time.perf_counter()
     #X = rescale(X, r)
-    X = np.array([X[j]/200 for j in range(len(X))])
+    X = np.array([X[j]/r for j in range(len(X))])
     toc = time.perf_counter()
     print(f"Rescaling took {toc - tic:0.4f} seconds")
     #step 2.
     #find maximally 1/100-distance set
     s,t = np.shape(X)
     #since this is a symmetric property first create a triangular matrix
-    tic = time.perf_counter()
-    graph = np.zeros((s,s), dtype=bool)
+    count = 0
     for j in range(s):
-        for i in range(j):
-            val = np.linalg.norm(X[i]-X[j]) >= 1/100
-            graph[i,j] = val
-            graph[j,i] = val
-    G = nx.Graph(graph)
-    print(f"Graph has {len(G.edges())} many edges")
+        if X[j][0] != -1:
+            for i in range(j):
+                if np.linalg.norm(X[i]-X[j]) <= 1/100:
+                    X[i][0] = -1
+    Y = [X[j] for j in range(s) if X[j][0] != -1]
+    print(f"Y is of size {len(Y)}")
+    tic = time.perf_counter()
+    with open('./output6.txt', 'a') as f1:
+        f1.write("%%MatrixMarket matrix coordinate pattern symmetric" + os.linesep) 
+        for j in range(len(Y)):
+            for i in range(j):
+                if np.linalg.norm(Y[i]-Y[j]) >= 1/100:
+                    count += 1
+                    f1.write(f"{i} {j}" + os.linesep)    
+    # G = nx.Graph(graph)
+    # print(f"Graph has {len(G.edges())} many edges")
+    print(count)
     toc = time.perf_counter()
     print(f"Building graph took {toc - tic:0.4f} seconds")
+    # tic = time.perf_counter()
+    # max_clique = list(nx.approximation.max_clique(G))
+
+def submanifoldInterpolationOld(n, r, X):
+    print(f"X is of size {len(X):d}, n is {n:d}")
+    #p. 62
+    #step 1.
     tic = time.perf_counter()
-    max_clique = list(nx.approximation.max_clique(G))
-    points_q = [X[j] for j in max_clique]
+    #X = rescale(X, r)
+    X = np.array([X[j]/r for j in range(len(X))])
     toc = time.perf_counter()
-    print(f"Finding maximal clique (size {len(max_clique):d}) took {toc - tic:0.4f} seconds")
+    print(f"Rescaling took {toc - tic:0.4f} seconds")
+    #step 2.
+    #find maximally 1/100-distance set
+    s,t = np.shape(X)
+    #since this is a symmetric property first create a triangular matrix
+    count = 0
+    tic = time.perf_counter()
+    with open('./output7.txt', 'a') as f1:
+        f1.write("%%MatrixMarket matrix coordinate pattern symmetric" + os.linesep) 
+        for j in range(s):
+            for i in range(j):
+                if np.linalg.norm(X[i]-X[j]) >= 1/100:
+                    count += 1
+                    f1.write(f"{i} {j}" + os.linesep)    
+    # G = nx.Graph(graph)
+    # print(f"Graph has {len(G.edges())} many edges")
+    print(count)
+    toc = time.perf_counter()
+    print(f"Building graph took {toc - tic:0.4f} seconds")
+    # tic = time.perf_counter()
+    # max_clique = list(nx.approximation.max_clique(G))
+
+
+
+def gettingF(max_clique, X, n):
+    points_q = [X[j] for j in max_clique]
     tic = time.perf_counter()
     X1s = [unitBallAroundxinX(q,X) for q in points_q]
     toc = time.perf_counter()
