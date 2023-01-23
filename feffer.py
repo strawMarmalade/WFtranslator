@@ -103,7 +103,8 @@ def submanifoldInterpolation(n, r, X):
     #p. 62
     #step 1.
     tic = time.perf_counter()
-    X = rescale(X, r)
+    #X = rescale(X, r)
+    X = np.array([X[j]/200 for j in range(len(X))])
     toc = time.perf_counter()
     print(f"Rescaling took {toc - tic:0.4f} seconds")
     #step 2.
@@ -118,6 +119,7 @@ def submanifoldInterpolation(n, r, X):
             graph[i,j] = val
             graph[j,i] = val
     G = nx.Graph(graph)
+    print(f"Graph has {len(G.edges())} many edges")
     toc = time.perf_counter()
     print(f"Building graph took {toc - tic:0.4f} seconds")
     tic = time.perf_counter()
@@ -151,16 +153,16 @@ def kPointsAroundEachxinXwithf(X, f, k, delta):
     fs = [f(p) for p in points]
     return (points, fs)
         
-X = np.reshape(np.random.uniform(0,1,8000), (1000,8))
-x0 = np.random.uniform(0,1,8)
-
-tic = time.perf_counter()
-q = findDisc(x0, X, 60)
-toc = time.perf_counter()
-print(f"Submanifold find took {toc - tic:0.4f} seconds\n")
+X = np.reshape(np.random.uniform(0,1,6000), (1000,6))
+x0 = np.random.uniform(0,1,6)
 
 # tic = time.perf_counter()
-# submanifoldInterpolation(4, 1/100, X)
+# q = findDisc(x0, X, 60)
+# toc = time.perf_counter()
+# print(f"Submanifold find took {toc - tic:0.4f} seconds\n")
+#%%
+# tic = time.perf_counter()
+# submanifoldInterpolation(4, 50, X)
 # toc = time.perf_counter()
 # print(f"Submanifold find took {toc - tic:0.4f} seconds\n")
 

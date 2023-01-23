@@ -6,7 +6,7 @@ import time
 from matplotlib.patches import Ellipse
 import math
 import torch
-
+import feffer
 
 """
 For a given gridSize (default 200),
@@ -373,9 +373,6 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     toc = time.perf_counter()
     print(f"Drawing the grid of ellipse took {toc - tic:0.4f} seconds\n")
 
-#%%
-fullEllipseRoutineTimer()
-
 def canonicalplus1(r, alpha, phi):
     return (math.acos(r*math.cos(alpha - phi)) + phi)
 def canonicalminus1(r, alpha, phi):
@@ -484,11 +481,75 @@ def getSinoWFFromList(WFList, N=201):
             incomingindexminus = round(incomingdegreeminus + 90)%180
             tplus = traveltimeplus(radius, positionangle, WFangleradian)
             tminus = traveltimeminus(radius, positionangle, WFangleradian)
-            SinoWFindexplus = pullback(boundaryradplus, incomingradplus, WFangleradian, tplus)
-            SinoWFindexminus = pullback(boundaryradminus, incomingradminus, WFangleradian, tminus)
+            SinoWFindexplus = pullback(boundaryradplus, incomingradplus, WFangleradian, tplus)%180
+            SinoWFindexminus = pullback(boundaryradminus, incomingradminus, WFangleradian, tminus)%180
             SinoWF[boundaryindexplus, incomingindexplus, SinoWFindexplus] = 1
             SinoWF[boundaryindexminus, incomingindexminus, SinoWFindexminus] = 1
-    return torch.tensor(SinoWF)
+    return SinoWF
+
+def dim4getSinoWFFromList(WFList, N=201):
+    SinoWF = []
+    for val in WFList:
+        pointGrid = val[0]
+        angles = [ang%180 for ang in val[1]]
+        rowindex = pointGrid[0]
+        colindex = pointGrid[1]
+        radius = math.sqrt((2*rowindex/(N-1) -1)**2 + (2*colindex/(N-1) - 1)**2)
+        #computes the distance of the pixel from the origin
+        if radius ==0:
+            positionangle = 0
+        else:
+            #print((2 * colindex / (N - 1) - 1) / radius)
+            #print(math.acos((2 * colindex / (N - 1) - 1) / radius))
+            positionangle = np.sign((2*rowindex/(N-1) -1))*math.acos((2 * colindex / (N - 1) - 1) / radius)
+            if np.sign((2*rowindex/(N-1) -1))== 0:
+                positionangle = math.acos((2 * colindex / (N - 1) - 1) / radius)
+        for WFangleindex in angles:
+            #print(positionangle)
+            #positionangle is the angle of the position measured in Radians. It takes the range between -pi to pi
+            WFangleradian = math.radians(WFangleindex)
+            #turns WFangle from entry index to radians
+            boundaryradplus = canonicalplus1(radius, positionangle, WFangleradian)
+            #above function returns location on the boundary of circle in radians.
+            # So the range is a float between 0 and 2pi
+            boundarydegreeplus = math.degrees(boundaryradplus)
+            boundaryindexplus = round(boundarydegreeplus *N/360)%N
+            boundaryradminus = canonicalminus1(radius, positionangle, WFangleradian)
+            boundarydegreeminus = math.degrees(boundaryradminus)
+            boundaryindexminus = round(boundarydegreeminus *N/360)%N
+            incomingradplus = canonicalplus2(radius, positionangle, WFangleradian)
+            #above function returns incoming direction in radians relative to the inward pointing normal
+            #so the range is an integer between -pi/2 degrees to pi/2 degrees
+            incomingdegreeplus = math.degrees(incomingradplus)
+            incomingradminus = - incomingradplus
+            incomingdegreeminus = -incomingdegreeplus
+            incomingindexplus = round(incomingdegreeplus + 90)%180
+            incomingindexminus = round(incomingdegreeminus + 90)%180
+            tplus = traveltimeplus(radius, positionangle, WFangleradian)
+            tminus = traveltimeminus(radius, positionangle, WFangleradian)
+            SinoWFindexplus = pullback(boundaryradplus, incomingradplus, WFangleradian, tplus)%180
+            SinoWFindexminus = pullback(boundaryradminus, incomingradminus, WFangleradian, tminus)%180
+            angPlus = point2grid(np.array([np.sin(np.deg2rad(SinoWFindexplus)), np.cos(np.deg2rad(SinoWFindexplus))]))
+            angMinus = point2grid(np.array([np.sin(np.deg2rad(SinoWFindexminus)), np.cos(np.deg2rad(SinoWFindexminus))]))
+            SinoWF.append(np.array([boundaryindexplus,incomingindexplus,angPlus[0],angPlus[1]]))
+            SinoWF.append(np.array([boundaryindexminus,incomingindexminus,angMinus[0],angMinus[1]]))
+    return np.array(SinoWF)
+
+def dim4WFList(WFList):
+    WF = []
+    for val in WFList:
+        pointGrid = val[0]
+        x = pointGrid[0]
+        y = pointGrid[1]
+        angles = [ang%180 for ang in val[1]]
+        for angle in angles:
+            ang = np.array([np.cos(np.deg2rad(angle)), np.sin(np.deg2rad(angle))])
+            p = point2grid(ang)
+            WF.append(np.array([x,y,p[0],p[1]]))
+            ang2 = np.array([np.cos(np.deg2rad(angle+180)), np.sin(np.deg2rad(angle+180))])
+            p2 = point2grid(ang2)
+            WF.append(np.array([x,y,p2[0],p2[1]]))
+    return np.array(WF)
 
 
 def WFListToPairOfPics(WFSetList, N=201):
@@ -504,3 +565,28 @@ def SheppLogShapeToData(shape, isPoly, N=201):
         WFSetList = ellipseToWFsetList(shape, gridSize=N, angleAccuracy=360)
         grid = torch.tensor(gridEll(shape, gridSize=N))
     return (grid, WFListToPairOfPics(WFSetList, N))
+
+def generateWFData(amount = 100, N=201):
+    WFData = []
+    for counter in range(amount):
+        print(counter)
+        if counter < amount//2:
+            randSize = np.random.randint(2, 10)
+            shape = generatePolygon(randSize)
+            WFSetList = polygonToWFsetList(shape, gridSize=N, angleAccuracy=360)
+        else:
+            shape = genEll()
+            WFSetList = ellipseToWFsetList(shape, gridSize=N, angleAccuracy=360)
+        WF = dim4WFList(WFSetList)
+        SinoWF = dim4getSinoWFFromList(WFSetList, N=N)
+        arr = [np.concatenate(np.array([SinoWF[j], WF[j]])) for j in range(len(WF))]
+        WFData.extend(arr)
+    return np.array(WFData)
+
+data = generateWFData(amount=5)
+
+tic = time.perf_counter()
+feffer.submanifoldInterpolation(4, 50, data)
+toc = time.perf_counter()
+print(f"Submanifold find took {toc - tic:0.4f} seconds\n")
+
