@@ -1,8 +1,8 @@
 //use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use std::sync::{Arc, Barrier, Mutex};
 use threadpool::ThreadPool;
 
 
@@ -216,81 +216,100 @@ impl PmcGraph{
         }
         self.max_core = self.kcore[self.kcore_order[n-2] as usize] - 1;
     }
-    pub fn search_bounds(&self) -> Vec<NAB> {
-        let verts = &self.vertices;
-        let n: usize = verts.len();
-        let edgs = &self.edges;
-        let kcores = &self.kcore;
-        let order = &self.kcore_order;
-        let degree = &self.degree;
-        let mut clique: Vec<NAB> = vec![];
-        let mut c_max: Vec<NAB> = vec![];
+    pub fn search_bounds<'a>(&'a self) -> Vec<NAB> {
+        let verts = Arc::new(&self.vertices);
+        let n = Arc::new(verts.len());
+        let edgs = Arc::new(&self.edges);
+        let kcores = Arc::new(&self.kcore);
+        let order = Arc::new(&self.kcore_order);
+        let degree = Arc::new(&self.degree);
+        let mut clique: Arc<Mutex<Vec<NAB>>> = Arc::new(Mutex::new(vec![]));
+        let mut c_max: Arc<Mutex<Vec<NAB>>>  = Arc::new(Mutex::new(vec![]));
         //let mut X: Vec<usize> = vec![];
-        let ub = self.max_core + 1;
-        let mut pairs: Vec<(NAB,NAB)> = vec![];
+        let ub = Arc::new(self.max_core + 1);
+        let mut pairs: Arc<Mutex<Vec<(NAB,NAB)>>> = Arc::new(Mutex::new(vec![]));
         //let mut T: Vec<Vertex> = vec![];
-        let mut ind: Vec<bool> = vec![false; n-1];
-        let mut found_ub: bool = false;
+        let mut ind: Arc<Mutex<Vec<bool>>> = Arc::new(Mutex::new(vec![false; *n-1]));
+        let mut found_ub = Arc::new(false);
 
-        let mut v: NAB;
-        let mut mc_prev: NAB;
-        let mut mc: NAB = 0;
-        let mut mc_cur: NAB;
+        let mut v: Arc<Mutex<NAB>> = Arc::new(Mutex::new(0));
+        let mut mc_prev: Arc<Mutex<NAB>> = Arc::new(Mutex::new(0));
+        let mut mc: Arc<Mutex<NAB>> = Arc::new(Mutex::new(0));
+        let mut mc_cur: Arc<Mutex<NAB>> = Arc::new(Mutex::new(0));
 
         let lock = Arc::new(AtomicBool::new(false)); // value answers "am I locked?"
+        let n_workers = *n;
+        let n_jobs = *n-1;
+        let pool = ThreadPool::new(n_workers);
+        let barrier = Arc::new(Barrier::new(n_jobs + 1));
 
         /* here start threads */
-        for i in (0..n-1).rev() {
-            if found_ub {
-                continue;
-            }
-            v = order[i];
-            mc_cur = mc;
-            mc_prev = mc_cur;
+        for i in (0..*n-1).rev() {
+            let barrier = barrier.clone();
+            let mut clique = clique.clone();
+            let mut c_max = c_max.clone();
+            //let mut X: Vec<usize> = vec![];
+            let mut pairs = pairs.clone();
+            //let mut T: Vec<Vertex> = vec![];
+            let mut ind = ind.clone();
+            let mut found_ub = found_ub.clone();
+    
+            let mut v = v.clone();
+            let mut mc_prev = mc_prev.clone();
+            let mut mc = mc.clone();
+            let mut mc_cur = mc_cur.clone();
+            pool.execute(|| {
+                if !*found_ub {
+                v = Arc::new(Mutex::new(*order.get(i).unwrap()));
+                mc_cur = mc;
+                mc_prev = mc_cur;
 
-            if kcores[v as usize] > mc {
-                for j in verts[v as usize]..verts[v as usize + 1] {
-                    if kcores[edgs[j as usize] as usize] > mc {
-                        pairs.push((edgs[j as usize], degree[edgs[j as usize] as usize]));
+                if kcores[*v.lock().unwrap() as usize] > *mc.lock().unwrap() {
+                    for j in verts[*v.lock().unwrap() as usize]..verts[*v.lock().unwrap() as usize + 1] {
+                        if kcores[edgs[j as usize] as usize] > *mc.lock().unwrap() {
+                            pairs.lock().unwrap().push((edgs[j as usize], degree[edgs[j as usize] as usize]));
+                        }
                     }
-                }
-                /*sort_by(|a, b| a.partial_cmp(b).unwrap());
-assert_eq!(floats, */
-                if pairs.len() > mc_cur as usize{
-                    /* If I want to get exactly the same result as the actual
-                    pmc code I need to do stable sort and make pmc do stable sort as well */
-                    pairs.sort_unstable_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-                    // for jjj in 0..P.len(){
-                    //     println!("id:{} b:{}", P[jjj].id, P[jjj].b);
-                    // }
-                    self.branch(&mut pairs, 1, &mut mc_cur, &mut clique, &mut ind);
-                    
-                    if mc_cur > mc_prev {
-                        if mc < mc_cur {
-                            // Try to acquire the lock by setting it to true
-                            while lock.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).unwrap() { }
-                            /* Here have to make sure if multiple threads it wont kill itself */
-                            if mc < mc_cur {
-                                mc = mc_cur;
-                                clique.push(v);
-                                c_max = clique;
-                                if mc >= ub {
-                                    found_ub = true;
+                    /*sort_by(|a, b| a.partial_cmp(b).unwrap());
+    assert_eq!(floats, */
+                    if pairs.lock().unwrap().len() > *mc_cur.lock().unwrap() as usize{
+                        /* If I want to get exactly the same result as the actual
+                        pmc code I need to do stable sort and make pmc do stable sort as well */
+                        pairs.lock().unwrap().sort_unstable_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                        // for jjj in 0..P.len(){
+                        //     println!("id:{} b:{}", P[jjj].id, P[jjj].b);
+                        // }
+                        self.branch(&mut *pairs.lock().unwrap(), 1, &mut *mc_cur.lock().unwrap(), &mut *clique.lock().unwrap(), &mut *ind.lock().unwrap());
+                        
+                        if *mc_cur.lock().unwrap() > *mc_prev.lock().unwrap() {
+                            if *mc.lock().unwrap() < *mc_cur.lock().unwrap() {
+                                // Try to acquire the lock by setting it to true
+                                while lock.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).unwrap() { }
+                                /* Here have to make sure if multiple threads it wont kill itself */
+                                if *mc.lock().unwrap() < *mc_cur.lock().unwrap() {
+                                    mc = mc_cur;
+                                    clique.lock().unwrap().push(*v.lock().unwrap());
+                                    c_max = clique;
+                                    if *mc.lock().unwrap() >= *ub {
+                                        *found_ub = true;
+                                    }
+                                    println!("{}", c_max.lock().unwrap().len());
                                 }
-                                println!("{}", c_max.len());
+                                lock.store(false, Ordering::Release);
                             }
-                            lock.store(false, Ordering::Release);
                         }
                     }
                 }
+                clique = Arc::new(Mutex::new(vec![]));
+                pairs = Arc::new(Mutex::new(vec![]));
             }
-            clique = vec![];
-            pairs = vec![];
+            });
         }
+        barrier.wait();
         //println!("Heuristic: clique= {:?}", C_max);
-        c_max
+        *c_max.lock().unwrap()
     }
-    pub fn branch(&self, pairs: &mut Vec<(NAB,NAB)>, sz: NAB, mc: &mut NAB, cliq: &mut Vec<NAB>, ind: &mut Vec<bool>){
+    pub fn branch<'a>(&'a self, pairs: &'a mut Vec<(NAB,NAB)>, sz: NAB, mc: &'a mut NAB, cliq: &'a mut Vec<NAB>, ind: &'a mut Vec<bool>){
         if pairs.len() > 0{
             let u = pairs.pop().unwrap().0;
             let verts = &self.vertices;

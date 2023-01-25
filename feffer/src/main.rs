@@ -5,6 +5,7 @@ use std::f32;
 use std::fs::File;
 use std::io::Write;
 use rand_chacha::ChaCha8Rng;
+use threadpool::ThreadPool;
 
 extern crate num_cpus;
 
@@ -205,6 +206,7 @@ fn find_disc(x0_point: &Array1<f32>, x_vals: &[Array1<f32>], n: u32) -> Vec<Arra
 }
 
 fn main() {
+    let numcpus = num_cpus::get();
     let range: distributions::Uniform<f32> = distributions::Uniform::from(0.0..1.0);
     // let mut rng: rand::rngs::ThreadRng = rand::thread_rng();
     const AMOUNT: usize = 5000;
