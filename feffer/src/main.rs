@@ -243,7 +243,7 @@ fn main() {
     let graph: PmcGraph = PmcGraph::new(verts, edgs);
     now = std::time::Instant::now();
     let clique = graph.search_bounds();
-    println!("Clique is {:?}", clique);
+    println!("Clique of size {} is {:?}", clique.len(), clique);
     elapsed_time = now.elapsed();
     println!(
         "Finding max clique took {} milliseconds.",

@@ -67,7 +67,6 @@ impl PmcGraph{
         }
         /* now we should have the graph in the hashmap and will convert it to the form we need it */
         vertices.push(edges.len());
-
         for ver in verts.iter() {
             if let Some(lst) = vert_list.get(ver) {
                 /* we have found this vertex in the hashmap and add all the edges and the vertex*/
@@ -218,10 +217,10 @@ impl PmcGraph{
         let degree = &self.degree;
         let mut clique: Vec<usize> = vec![];
         let mut C_max: Vec<usize> = vec![];
-        let mut X: Vec<usize> = vec![];
+        //let mut X: Vec<usize> = vec![];
         let ub = self.max_core + 1;
         let mut P: Vec<Vertex> = vec![];
-        let mut T: Vec<Vertex> = vec![];
+        //let mut T: Vec<Vertex> = vec![];
         let mut ind: Vec<bool> = vec![false; n-1];
         let mut found_ub: bool = false;
 
@@ -229,6 +228,7 @@ impl PmcGraph{
         let mut mc_prev: usize = 0;
         let mut mc: usize = 0;
         let mut mc_cur: usize = 0;
+
 
         for i in (0..n-1).rev() {
             if found_ub {
@@ -247,33 +247,37 @@ impl PmcGraph{
                 /*sort_by(|a, b| a.partial_cmp(b).unwrap());
 assert_eq!(floats, */
                 if P.len() > mc_cur {
-                    P.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                    PmcGraph::branch(&self, &mut P, 1, &mut mc_cur, &mut clique, &mut ind);
+                    /* If I want to get exactly the same result as the actual
+                    pmc code I need to do stable sort and make pmc do stable sort as well */
+                    P.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+                    // for jjj in 0..P.len(){
+                    //     println!("id:{} b:{}", P[jjj].id, P[jjj].b);
+                    // }
+                    self.branch(&mut P, 1, &mut mc_cur, &mut clique, &mut ind);
                     
                     if mc_cur > mc_prev {
                         if mc < mc_cur {
                             /* Here have to make sure if multiple threads it wont kill itself */
                             mc = mc_cur;
                             clique.push(v);
-                            C_max = clique.clone();
+                            C_max = clique;
                             if mc >= ub {
                                 found_ub = true;
                             }
-                            //println!("{:?}", C_max);
+                            println!("{}", C_max.len());
                         }
                     }
-                
-                
                 }
-                clique = X.clone();
-                P = T.clone();
             }
+            clique = vec![];
+            P = vec![];
         }
         //println!("Heuristic: clique= {:?}", C_max);
         C_max
     }
     pub fn branch(&self, P: &mut Vec<Vertex>, sz: usize, mc: &mut usize, C: &mut Vec<usize>, ind: &mut Vec<bool>){
         if P.len() > 0{
+            let www = *&P.to_vec()[0].id;
             let u = P.pop().unwrap().id;
             let V = &self.vertices;
             let E = &self.edges;
@@ -294,6 +298,7 @@ assert_eq!(floats, */
                 ind[E[j]] = false;
             }
             let mc_prev = mc.clone();
+            //println!("sz: {}, mc: {}", sz, mc);
             self.branch(&mut R, sz+1, mc, C, ind);
 
             if *mc > mc_prev {
