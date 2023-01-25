@@ -641,9 +641,9 @@ def generateWFData(amount = 100, N=201):
         WFData.extend(arr)
     return np.array(WFData)
 
-np.random.seed(42)
+np.random.seed(43)
 
-data = generateWFData(amount=5)
+data = generateWFData(amount=10)
 
 tic = time.perf_counter()
 feffer.submanifoldInterpolation(4, 200, data)

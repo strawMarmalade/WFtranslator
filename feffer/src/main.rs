@@ -1,87 +1,89 @@
 use ndarray::{self, Array1};
+use rand::SeedableRng;
 use rand::{self, distributions, prelude::Distribution};
 use std::f32;
 use std::fs::File;
 use std::io::Write;
+use rand_chacha::ChaCha8Rng;
 
 //use std::time;
-
-mod graph;
+mod pmcgraph;
+//mod graph;
 //mod backtracking;
 //mod branch_and_bound;
 
-use crate::graph::Graph;
+//use crate::graph::Graph;
+use crate::pmcgraph::PmcGraph;
 
-static DIM: usize = 8;
+static DIM: usize = 2;
 
+// /// Solves the maximum clique problem by using a branch and bound.
+// pub fn solve_branch_and_bound(graph: &Graph) -> Graph {
+//     branch_and_bound(&graph, &graph.nodes_ord_by_degree(), Graph::default())
+// }
 
-/// Solves the maximum clique problem by using a branch and bound.
-pub fn solve_branch_and_bound(graph: &Graph) -> Graph {
-    branch_and_bound(&graph, &graph.nodes_ord_by_degree(), Graph::default())
-}
+// /// Solves the maximum clique problem by using a backtracking.
+// pub fn solve_backtracking(graph: &Graph) -> Graph {
+//     backtracking(&graph, &graph.nodes(), Graph::default())
+// }
 
-/// Solves the maximum clique problem by using a backtracking.
-pub fn solve_backtracking(graph: &Graph) -> Graph {
-    backtracking(&graph, &graph.nodes(), Graph::default())
-}
+// fn branch_and_bound(graph: &Graph, nodes: &[usize], mut clique: Graph) -> Graph {
+//     // Clone current solution
+//     let mut subgraph = clique.clone();
+//     // Visit all nodes
+//     for (i, &n) in nodes.iter().enumerate() {
+//         // Prune branch if the current `k`-clique subgraph cannot increase
+//         if clique.degree() >= graph.degree_of(n) {
+//             break;
+//         }
+//         // Add node
+//         subgraph.insert_node(n);
+//         // Add edges
+//         for c in subgraph.nodes() {
+//             if graph.adjlst_of(n).contains(&c) {
+//                 subgraph.insert_edge((c, n));
+//             }
+//         }
+//         // Create a search branch and get the branch best solution
+//         let sol = branch_and_bound(graph, &nodes[i + 1..], subgraph.clone());
+//         // Check if the branch best solution is better than the current one
+//         if (sol.is_complete() && clique.is_empty())
+//             || (sol.is_complete() && sol.degree() > clique.degree())
+//         {
+//             clique = sol;
+//         }
+//         // Remove added node
+//         subgraph.remove_node(n);
+//     }
+//     clique
+// }
 
-fn branch_and_bound(graph: &Graph, nodes: &[usize], mut clique: Graph) -> Graph {
-    // Clone current solution
-    let mut subgraph = clique.clone();
-    // Visit all nodes
-    for (i, &n) in nodes.iter().enumerate() {
-        // Prune branch if the current `k`-clique subgraph cannot increase
-        if clique.degree() >= graph.degree_of(n) {
-            break;
-        }
-        // Add node
-        subgraph.insert_node(n);
-        // Add edges
-        for c in subgraph.nodes() {
-            if graph.adjlst_of(n).contains(&c) {
-                subgraph.insert_edge((c, n));
-            }
-        }
-        // Create a search branch and get the branch best solution
-        let sol = branch_and_bound(graph, &nodes[i + 1..], subgraph.clone());
-        // Check if the branch best solution is better than the current one
-        if (sol.is_complete() && clique.is_empty())
-            || (sol.is_complete() && sol.degree() > clique.degree())
-        {
-            clique = sol;
-        }
-        // Remove added node
-        subgraph.remove_node(n);
-    }
-    clique
-}
-
-fn backtracking(graph: &Graph, nodes: &[usize], mut clique: Graph) -> Graph {
-    // Clone current solution
-    let mut subgraph = clique.clone();
-    // Visit all nodes
-    for (i, n) in nodes.iter().enumerate() {
-        // Add node
-        subgraph.insert_node(*n);
-        // Add edges
-        for c in subgraph.nodes() {
-            if graph.adjlst_of(*n).contains(&c) {
-                subgraph.insert_edge((c, *n));
-            }
-        }
-        // Create a backtracking branch and get the branch best solution
-        let sol = backtracking(graph, &nodes[i + 1..], subgraph.clone());
-        // Check if the branch best solution is better than the current one
-        if (sol.is_complete() && clique.is_empty())
-            || (sol.is_complete() && sol.degree() >= clique.degree())
-        {
-            clique = sol;
-        }
-        // Remove added node
-        subgraph.remove_node(*n);
-    }
-    clique
-}
+// fn backtracking(graph: &Graph, nodes: &[usize], mut clique: Graph) -> Graph {
+//     // Clone current solution
+//     let mut subgraph = clique.clone();
+//     // Visit all nodes
+//     for (i, n) in nodes.iter().enumerate() {
+//         // Add node
+//         subgraph.insert_node(*n);
+//         // Add edges
+//         for c in subgraph.nodes() {
+//             if graph.adjlst_of(*n).contains(&c) {
+//                 subgraph.insert_edge((c, *n));
+//             }
+//         }
+//         // Create a backtracking branch and get the branch best solution
+//         let sol = backtracking(graph, &nodes[i + 1..], subgraph.clone());
+//         // Check if the branch best solution is better than the current one
+//         if (sol.is_complete() && clique.is_empty())
+//             || (sol.is_complete() && sol.degree() >= clique.degree())
+//         {
+//             clique = sol;
+//         }
+//         // Remove added node
+//         subgraph.remove_node(*n);
+//     }
+//     clique
+// }
 
 // /// Redirects the graph to the selected solver, run it and return a maximum
 // /// clique subgraph.
@@ -200,40 +202,43 @@ fn find_disc(x0_point: &Array1<f32>, x_vals: &[Array1<f32>], n: u32) -> Vec<Arra
 
 fn main() {
     let range: distributions::Uniform<f32> = distributions::Uniform::from(0.0..1.0);
-    let mut rng: rand::rngs::ThreadRng = rand::thread_rng();
+    // let mut rng: rand::rngs::ThreadRng = rand::thread_rng();
+    const AMOUNT: usize = 5000;
+    let mut rng = ChaCha8Rng::seed_from_u64(42);
     let mut now: std::time::Instant = std::time::Instant::now();
-    let x_vals: [Array1<f32>; 1000] =
-        [(); 1000].map(|_| range.sample_iter(&mut rng).take(DIM).collect());
+    let x_vals: [Array1<f32>; AMOUNT] =
+        [(); AMOUNT].map(|_| range.sample_iter(&mut rng).take(DIM).collect());
     let mut elapsed_time = now.elapsed();
     println!(
         "Generating random points took {} milliseconds.",
         elapsed_time.as_millis()
     );
 
-    //let mut graph = Graph::new(1000_usize);
+    let verts: Vec<usize> = (0..AMOUNT).collect();
+    let mut edgs: Vec<(usize,usize)> = vec![];
 
     let path = "matrix2.txt";
     let mut output = File::create(path).unwrap();
-    let line = "%%MatrixMarket matrix coordinate pattern symmetric\n";
-    write!(output, "{}", line).unwrap();
-
-    let mut counter: usize = 0;
 
     now = std::time::Instant::now();
-    for j in 0..1000 {
+    for j in 0..AMOUNT {
         for k in 0..j {
             let diff: Array1<f32> = x_vals[j].clone() - x_vals[k].clone();
             let dist: f32 = diff.dot(&diff);
             //println!("{}", dist);
             if dist >= 1.0/100.0 {
-                counter += 1;
+                edgs.push((j,k));
                 write!(output, "{} {}\n", (k+1).to_string(), (j+1).to_string()).unwrap();
                 //graph.insert_edge((k + 1, j + 1));
                 //graph.insert_edge((j + 1, k + 1));
             }
         }
     }
-    println!("{}", counter);
+
+    let graph: PmcGraph = PmcGraph::new(verts, edgs);
+    let clique = graph.search_bounds();
+    println!("Clique is {:?}", clique);
+
 
     elapsed_time = now.elapsed();
     println!(

@@ -3,6 +3,8 @@ import scipy.linalg as la
 import time
 import networkx as nx
 import os
+#from ctypes import *
+import ctypes
 
 def mu(x,q):
     #p. 29
@@ -98,6 +100,77 @@ def kPointsIndeltaNeighOfx(k,delta,x):
                 knonfulfilled -= 1
     return insidePoints
 
+def getMaxSet(X, mode):
+    Y = []
+    X = list(X)
+    if mode == "random":
+        lenX = len(X)
+        while lenX > 0:
+            Y.append(X[0])
+            j = 0
+            while j < lenX:
+                if np.linalg.norm(X[j]-Y[-1]) <= 1/100:
+                    X.pop(j)
+                    #X = np.delete(X,(j), axis=0)
+                    lenX -= 1
+                    j -= 1
+                j += 1
+    print(f"Y len is {len(Y)}")     
+    return Y
+
+def exportMatOfDist(X):
+    count = 0
+    with open('./output10shapes.txt', 'a') as f1:
+        f1.write("%%MatrixMarket matrix coordinate pattern symmetric" + os.linesep) 
+        for j in range(len(X)):
+            for i in range(j):
+                if np.linalg.norm(X[i]-X[j]) > 1/100:
+                    count += 1
+                    f1.write(f"{i} {j}" + os.linesep)   
+    print(count)
+
+def pmc(nnodes, nedges, startEdges, endEdges, cliqueArray):
+    #_libpmc = ctypes.CDLL("/home/leo/Documents/work/WFtranslator/pmcdev/build/out/libpmc.so")
+    _libpmc = ctypes.CDLL("/usr/local/lib/libpmc.so")
+    """
+       int res = max_clique(long long nedges, int *ei, int *ej,
+                int outsize, int *clique,
+                bool verbose=true,
+                int algorithm=0,
+                int threads=1,
+                bool graph_stats=false,
+                string heuristic_strategy="kcore",
+                double time_limit_secs=60*60,
+                double remove_time_secs = 4.0,
+                string edge_sorter = "",
+                string vertex_search_order = "deg",
+                bool decreasing_order=false
+                );
+    """
+    _libpmc.max_clique.argtypes = (ctypes.c_longlong, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.POINTER(ctypes.c_int), ctypes.c_bool, ctypes.c_int,ctypes.c_int, ctypes.c_bool,ctypes.POINTER(ctypes.c_char),ctypes.c_double, ctypes.c_double, ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_char), ctypes.c_bool)
+    edgesLen = ctypes.c_longlong(nedges)
+    array_type = ctypes.c_int*nedges
+    array_node_type = ctypes.c_int*nnodes
+    result =  _libpmc.max_clique(edgesLen, array_type(*startEdges), array_type(*endEdges), ctypes.c_int(nnodes), array_node_type(*cliqueArray), ctypes.c_bool(True), ctypes.c_int(0), ctypes.c_int(16), ctypes.c_bool(True), "deg".encode('utf-8'), ctypes.c_double(60*60), ctypes.c_double(4), "".encode('utf-8'), "deg".encode('utf-8'), ctypes.c_bool(False))
+    # _libpmc.print_max_clique.argtypes = (ctypes.c_longlong, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.POINTER(ctypes.c_int))
+    # edgesLen = ctypes.c_longlong(nedges)
+    # array_type = ctypes.c_int*nedges
+    # array_node_type = ctypes.c_int*nnodes
+    # result =  _libpmc.print_max_clique(edgesLen, array_type(*startEdges), array_type(*endEdges), ctypes.c_int(nnodes), array_node_type(*cliqueArray))
+    print(result)
+
+    # count = 0
+    # fromList = []
+    # toList = []
+    # for j in range(len(X)):
+    #     for i in range(j):
+    #         if np.linalg.norm(X[i]-X[j]) > 1/100:
+    #             count += 1
+    #             fromList.append(j)
+    #             toList.append(i)
+    # cliqueArray = []*s
+    # print("Before pmc")
+    # pmc(s, count, fromList, toList, cliqueArray)
 
 def submanifoldInterpolation(n, r, X):
     print(f"X is of size {len(X):d}, n is {n:d}")
@@ -112,29 +185,14 @@ def submanifoldInterpolation(n, r, X):
     #find maximally 1/100-distance set
     s,t = np.shape(X)
     #since this is a symmetric property first create a triangular matrix
-    count = 0
-    for j in range(s):
-        if X[j][0] != -1:
-            for i in range(j):
-                if np.linalg.norm(X[i]-X[j]) <= 1/100:
-                    X[i][0] = -1
-    Y = [X[j] for j in range(s) if X[j][0] != -1]
-    print(f"Y is of size {len(Y)}")
     tic = time.perf_counter()
-    with open('./output6.txt', 'a') as f1:
-        f1.write("%%MatrixMarket matrix coordinate pattern symmetric" + os.linesep) 
-        for j in range(len(Y)):
-            for i in range(j):
-                if np.linalg.norm(Y[i]-Y[j]) >= 1/100:
-                    count += 1
-                    f1.write(f"{i} {j}" + os.linesep)    
-    # G = nx.Graph(graph)
-    # print(f"Graph has {len(G.edges())} many edges")
-    print(count)
+    exportMatOfDist(X)
     toc = time.perf_counter()
-    print(f"Building graph took {toc - tic:0.4f} seconds")
-    # tic = time.perf_counter()
-    # max_clique = list(nx.approximation.max_clique(G))
+    print(f"Outputting matrix took {toc - tic:0.4f} seconds")
+    tic = time.perf_counter()
+    Y = getMaxSet(X, "random")
+    toc = time.perf_counter()
+    print(f"Get max set took {toc - tic:0.4f} seconds")
 
 def submanifoldInterpolationOld(n, r, X):
     print(f"X is of size {len(X):d}, n is {n:d}")
@@ -157,7 +215,7 @@ def submanifoldInterpolationOld(n, r, X):
             for i in range(j):
                 if np.linalg.norm(X[i]-X[j]) >= 1/100:
                     count += 1
-                    f1.write(f"{i} {j}" + os.linesep)    
+                    f1.write(f"{i} {j}" + os.linesep) 
     # G = nx.Graph(graph)
     # print(f"Graph has {len(G.edges())} many edges")
     print(count)
