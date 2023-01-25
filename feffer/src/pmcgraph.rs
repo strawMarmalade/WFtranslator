@@ -1,7 +1,15 @@
-use std::cmp::Ordering;
+//use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use threadpool::ThreadPool;
 
-type AdjMtx = HashMap<usize, Vec<usize>>;
+
+/* this is the node amount bound. If we have more than 4_294_967_295 many nodes, change this to usize/u64 */
+type NAB = u32;
+type AdjMtx = HashMap<NAB, Vec<NAB>>;
+
 
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct PmcGraph{
@@ -9,34 +17,34 @@ pub struct PmcGraph{
     so if we have the graph 1 - 2 - 3 - 1, then edges would be 2, 3, 1, 3, 1, 2 as 1 is connected to 2 and 3
     and 2 is connected to 1 and 3 and 3 is connected to 1 and 2
     */
-    edges: Vec<usize>,
+    edges: Vec<NAB>,
     /* vertices is a list that at index j is the sum of the degrees of every vertex 0,...,j-2 */
     vertices: Vec<usize>,
     /* the degree of each vertex */
-    degree: Vec<usize>,
+    degree: Vec<NAB>,
     /* the min and max degrees of the entire graph */
-    min_degree: usize,
-    max_degree: usize,
+    min_degree: NAB,
+    max_degree: NAB,
     //want f64 here but can't compare those in rust with the Eq trait, so instead use a fraction and to check will have to compare values but eh 
-    avg_degree: (usize,usize), 
-    is_gstats: bool,
+    //avg_degree: (NAB,NAB), 
+    //is_gstats: bool,
     //we leave away the string fn
     //and the adjoint matrix adj for now
-    max_core: usize,
-    kcore: Vec<usize>,
-    kcore_order: Vec<usize>,
+    max_core: NAB,
+    kcore: Vec<NAB>,
+    kcore_order: Vec<NAB>,
 }
 
 impl PmcGraph{
-    pub fn new(verts: Vec<usize>, edgs: Vec<(usize,usize)>) -> PmcGraph{
+    pub fn new(verts: Vec<NAB>, edgs: Vec<(NAB,NAB)>) -> PmcGraph{
         let mut vertices: Vec<usize> = vec![];
-        let mut edges: Vec<usize> = vec![];
+        let mut edges: Vec<NAB> = vec![];
         let mut vert_list: AdjMtx = AdjMtx::new();
-        let mut currentStartVert: usize = edgs[0].0;
+        let mut current_start_vert: NAB = edgs[0].0;
         let mut now: std::time::Instant = std::time::Instant::now();
-        vert_list.insert(currentStartVert, vec![]);
+        vert_list.insert(current_start_vert, vec![]);
         for e in edgs {
-            if e.0 != currentStartVert {
+            if e.0 != current_start_vert {
                 /*as we hope the edges will be somewhat ordered we 
                 we might save so time by first checking against that*/
                 /*now if the vertex is not already contained we add it to the hashmap */
@@ -44,7 +52,7 @@ impl PmcGraph{
                     vert_list.insert(e.0, vec![]);
                 }
                 /*now update the current vector for the next round */
-                currentStartVert = e.0;
+                current_start_vert = e.0;
             }
             /*probably however the end node will be the one that keeps on changing so we'll just have to check every time whether or not its already in the hashmap or not */
             if !vert_list.contains_key(&e.1){
@@ -83,7 +91,8 @@ impl PmcGraph{
         );
         let n = vertices.len();
         let mut g = PmcGraph { vertices: vertices, edges: edges, degree: vec![0; n-1], min_degree: 0, max_degree: 0,
-            avg_degree: (0,1), is_gstats: false, max_core: 0, kcore: vec![], kcore_order: vec![]};
+            //avg_degree: (0,1), is_gstats: false, 
+            max_core: 0, kcore: vec![], kcore_order: vec![]};
         now = std::time::Instant::now();
         g.vertex_degrees();
         elapsed_time = now.elapsed();
@@ -105,11 +114,11 @@ impl PmcGraph{
         let n = self.vertices.len() - 1;
 
         // initialize min and max to degree of first vertex
-        let mut max_degree: usize = self.vertices[1] - self.vertices[0] ;
-        let mut min_degree: usize = self.vertices[1] - self.vertices[0];
+        let mut max_degree: NAB = (self.vertices[1] - self.vertices[0]) as NAB;
+        let mut min_degree: NAB = (self.vertices[1] - self.vertices[0]) as NAB;
 
         for v in 0..n {
-            self.degree[v] = self.vertices[v+1] - self.vertices[v];
+            self.degree[v] = (self.vertices[v+1] - self.vertices[v]) as NAB;
             if max_degree < self.degree[v] {
                 max_degree = self.degree[v];
             } 
@@ -119,13 +128,13 @@ impl PmcGraph{
         }
         self.max_degree = max_degree;
         self.min_degree = min_degree;
-        self.avg_degree = (self.edges.len(), n);
+        //self.avg_degree = (self.edges.len() as NAB, n as NAB);
         return;
     }
     pub fn compute_cores(&mut self) {
         let n: usize = self.vertices.len(); 
 
-        let mut pos: Vec<usize> = vec![0;n];
+        let mut pos: Vec<NAB> = vec![0;n];
         if self.kcore_order.len() > 0 {
             //let tmp: Vec<usize> = vec![0; n];
             self.kcore = vec![0; n];
@@ -136,66 +145,65 @@ impl PmcGraph{
             self.kcore.resize(n, 0);
         }
 
-        let mut md: usize = 0;        
+        let mut md: NAB = 0;        
 
         for v in 1..n {
-            self.kcore[v] = self.vertices[v] - self.vertices[v-1];
+            self.kcore[v] = (self.vertices[v] - self.vertices[v-1]) as NAB;
             if self.kcore[v] > md {
                 md = self.kcore[v];
             }
         }
 
-        let md_end: usize = md+1;
+        let md_end: NAB = md+1;
 
-        let mut bin: Vec<usize> = vec![0; md_end];
+        let mut bin: Vec<NAB> = vec![0; md_end as usize];
 
         for v in 1..n {
-            bin[self.kcore[v]] += 1;
+            bin[self.kcore[v] as usize] += 1;
         }
 
-        let mut start: usize = 1;
-        let mut num: usize = 0;
+        let mut start: NAB = 1;
+        let mut num: NAB;
 
         for d in 0..md_end {
-            num = bin[d];
-            bin[d] = start;
+            num = bin[d as usize];
+            bin[d as usize] = start;
             start += num;
         }
 
         for v in 1..n {
-            pos[v] = bin[self.kcore[v]];
-            self.kcore_order[pos[v]] = v;
-            bin[self.kcore[v]] += 1;
+            pos[v] = bin[self.kcore[v] as usize];
+            self.kcore_order[pos[v] as usize] = v as NAB;
+            bin[self.kcore[v] as usize] += 1;
         }
 
         for d in (2..=md).rev() {
-            bin[d] = bin[d-1];
+            bin[d as usize] = bin[d as usize - 1];
         }
         bin[0] = 1;
 
-        let mut v: usize = 0;
-        let mut u: usize = 0;
-        let mut w: usize = 0;
-        let mut du: usize = 0;
-        let mut pu: usize = 0;
-        let mut pw: usize = 0;
-
+        let mut v: usize;
+        let mut u: usize;
+        let mut w: usize;
+        let mut du: usize;
+        let mut pu: usize;
+        let mut pw: usize;
 
         // kcores
         for i in 1..n {
-            v=self.kcore_order[i];
+            v=self.kcore_order[i as usize] as usize;
             for j in self.vertices[v-1]..self.vertices[v]{
-                u = self.edges[j] + 1;
+                u = self.edges[j] as usize + 1;
                 if self.kcore[u] > self.kcore[v] {
-                    du = self.kcore[u];   
-                    pu = pos[u];
-                    pw = bin[du];
-                    w = self.kcore_order[pw];
+                    du = self.kcore[u] as usize;   
+                    pu = pos[u] as usize;
+                    pw = bin[du] as usize;
+                    w = self.kcore_order[pw] as usize;
                     if u != w {
-                        pos[u] = pw;   
-                        self.kcore_order[pu] = w;
-                        pos[w] = pu;   
-                        self.kcore_order[pw] = u;
+                        pos[u] = pw as NAB;   
+                        self.kcore_order[pu] = w as NAB;
+                        pos[w] = pu as NAB;   
+                        self.kcore_order[pw] = u as NAB;
                     }
                     bin[du] += 1;
                     self.kcore[u] -= 1;
@@ -206,30 +214,32 @@ impl PmcGraph{
             self.kcore[v] = self.kcore[v+1] + 1; // K + 1
             self.kcore_order[v] = self.kcore_order[v+1]-1;
         }
-        self.max_core = self.kcore[self.kcore_order[n-2]] - 1;
+        self.max_core = self.kcore[self.kcore_order[n-2] as usize] - 1;
     }
-    pub fn search_bounds(&self) -> Vec<usize> {
-        let V = &self.vertices;
-        let n: usize = V.len();
-        let E = &self.edges;
-        let K = &self.kcore;
+    pub fn search_bounds(&self) -> Vec<NAB> {
+        let verts = &self.vertices;
+        let n: usize = verts.len();
+        let edgs = &self.edges;
+        let kcores = &self.kcore;
         let order = &self.kcore_order;
         let degree = &self.degree;
-        let mut clique: Vec<usize> = vec![];
-        let mut C_max: Vec<usize> = vec![];
+        let mut clique: Vec<NAB> = vec![];
+        let mut c_max: Vec<NAB> = vec![];
         //let mut X: Vec<usize> = vec![];
         let ub = self.max_core + 1;
-        let mut P: Vec<Vertex> = vec![];
+        let mut pairs: Vec<(NAB,NAB)> = vec![];
         //let mut T: Vec<Vertex> = vec![];
         let mut ind: Vec<bool> = vec![false; n-1];
         let mut found_ub: bool = false;
 
-        let mut v: usize = 0;
-        let mut mc_prev: usize = 0;
-        let mut mc: usize = 0;
-        let mut mc_cur: usize = 0;
+        let mut v: NAB;
+        let mut mc_prev: NAB;
+        let mut mc: NAB = 0;
+        let mut mc_cur: NAB;
 
+        let lock = Arc::new(AtomicBool::new(false)); // value answers "am I locked?"
 
+        /* here start threads */
         for i in (0..n-1).rev() {
             if found_ub {
                 continue;
@@ -238,71 +248,74 @@ impl PmcGraph{
             mc_cur = mc;
             mc_prev = mc_cur;
 
-            if K[v] > mc {
-                for j in V[v]..V[v+1] {
-                    if K[E[j]] > mc {
-                        P.push(Vertex { id: E[j], b: degree[E[j]] });
+            if kcores[v as usize] > mc {
+                for j in verts[v as usize]..verts[v as usize + 1] {
+                    if kcores[edgs[j as usize] as usize] > mc {
+                        pairs.push((edgs[j as usize], degree[edgs[j as usize] as usize]));
                     }
                 }
                 /*sort_by(|a, b| a.partial_cmp(b).unwrap());
 assert_eq!(floats, */
-                if P.len() > mc_cur {
+                if pairs.len() > mc_cur as usize{
                     /* If I want to get exactly the same result as the actual
                     pmc code I need to do stable sort and make pmc do stable sort as well */
-                    P.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+                    pairs.sort_unstable_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
                     // for jjj in 0..P.len(){
                     //     println!("id:{} b:{}", P[jjj].id, P[jjj].b);
                     // }
-                    self.branch(&mut P, 1, &mut mc_cur, &mut clique, &mut ind);
+                    self.branch(&mut pairs, 1, &mut mc_cur, &mut clique, &mut ind);
                     
                     if mc_cur > mc_prev {
                         if mc < mc_cur {
+                            // Try to acquire the lock by setting it to true
+                            while lock.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).unwrap() { }
                             /* Here have to make sure if multiple threads it wont kill itself */
-                            mc = mc_cur;
-                            clique.push(v);
-                            C_max = clique;
-                            if mc >= ub {
-                                found_ub = true;
+                            if mc < mc_cur {
+                                mc = mc_cur;
+                                clique.push(v);
+                                c_max = clique;
+                                if mc >= ub {
+                                    found_ub = true;
+                                }
+                                println!("{}", c_max.len());
                             }
-                            println!("{}", C_max.len());
+                            lock.store(false, Ordering::Release);
                         }
                     }
                 }
             }
             clique = vec![];
-            P = vec![];
+            pairs = vec![];
         }
         //println!("Heuristic: clique= {:?}", C_max);
-        C_max
+        c_max
     }
-    pub fn branch(&self, P: &mut Vec<Vertex>, sz: usize, mc: &mut usize, C: &mut Vec<usize>, ind: &mut Vec<bool>){
-        if P.len() > 0{
-            let www = *&P.to_vec()[0].id;
-            let u = P.pop().unwrap().id;
-            let V = &self.vertices;
-            let E = &self.edges;
-            let K = &self.kcore;
+    pub fn branch(&self, pairs: &mut Vec<(NAB,NAB)>, sz: NAB, mc: &mut NAB, cliq: &mut Vec<NAB>, ind: &mut Vec<bool>){
+        if pairs.len() > 0{
+            let u = pairs.pop().unwrap().0;
+            let verts = &self.vertices;
+            let edgs = &self.edges;
+            let kcores = &self.kcore;
 
-            for j in V[u]..V[u+1] {
-                ind[E[j]] = true;
+            for j in verts[u as usize]..verts[u as usize +1] {
+                ind[edgs[j as usize] as usize] = true;
             }
-            let mut R: Vec<Vertex>  = vec![];
-            for i in 0..P.len() {
-                if ind[P[i].id] {
-                    if K[P[i].id] > *mc {
-                        R.push(P[i].clone());
+            let mut remain: Vec<(NAB,NAB)>  = vec![];
+            for i in 0..pairs.len() {
+                if ind[pairs[i as usize].0 as usize] {
+                    if kcores[pairs[i as usize].0 as usize] > *mc {
+                        remain.push(pairs[i as usize].clone());
                     }
                 }
             }
-            for j in V[u]..V[u+1] {
-                ind[E[j]] = false;
+            for j in verts[u as usize]..verts[u as usize +1] {
+                ind[edgs[j as usize] as usize] = false;
             }
             let mc_prev = mc.clone();
-            //println!("sz: {}, mc: {}", sz, mc);
-            self.branch(&mut R, sz+1, mc, C, ind);
+            self.branch(&mut remain, sz+1, mc, cliq, ind);
 
             if *mc > mc_prev {
-                C.push(u);
+                cliq.push(u);
             }
         }
         else if sz > *mc {
@@ -311,18 +324,18 @@ assert_eq!(floats, */
     }
 }
 
-#[derive(Default, Clone, Debug, Eq, PartialEq)]
-pub struct Vertex {
-    id: usize,
-    b: usize,
-}
-impl Ord for Vertex {
-    fn cmp(&self, other: &Self) -> Ordering {
-        (self.b).cmp(&other.b)
-    }
-}
-impl PartialOrd for Vertex {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
+// #[derive(Default, Clone, Debug, Eq, PartialEq)]
+// pub struct Vertex {
+//     id: usize,
+//     b: usize,
+// }
+// impl Ord for Vertex {
+//     fn cmp(&self, other: &Self) -> Ordering {
+//         (self.b).cmp(&other.b)
+//     }
+// }
+// impl PartialOrd for Vertex {
+//     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+//         Some(self.cmp(other))
+//     }
+// }

@@ -6,6 +6,8 @@ use std::fs::File;
 use std::io::Write;
 use rand_chacha::ChaCha8Rng;
 
+extern crate num_cpus;
+
 //use std::time;
 mod pmcgraph;
 //mod graph;
@@ -15,6 +17,8 @@ mod pmcgraph;
 //use crate::graph::Graph;
 use crate::pmcgraph::PmcGraph;
 
+
+type NAB = u32;
 static DIM: usize = 2;
 
 // /// Solves the maximum clique problem by using a branch and bound.
@@ -214,20 +218,20 @@ fn main() {
         elapsed_time.as_millis()
     );
 
-    let verts: Vec<usize> = (0..AMOUNT).collect();
-    let mut edgs: Vec<(usize,usize)> = vec![];
+    let verts: Vec<u32> = (0..5000).collect();
+    let mut edgs: Vec<(u32,u32)> = vec![];
 
     //let path = "matrix2.txt";
     //let mut output = File::create(path).unwrap();
 
     now = std::time::Instant::now();
-    for j in 0..AMOUNT {
+    for j in 0..5000 {
         for k in 0..j {
             let diff: Array1<f32> = x_vals[j].clone() - x_vals[k].clone();
             let dist: f32 = diff.dot(&diff);
             //println!("{}", dist);
             if dist >= 1.0/100.0 {
-                edgs.push((j,k));
+                edgs.push((j as u32,k as u32));
                 //write!(output, "{} {}\n", (k+1).to_string(), (j+1).to_string()).unwrap();
                 //graph.insert_edge((k + 1, j + 1));
                 //graph.insert_edge((j + 1, k + 1));
