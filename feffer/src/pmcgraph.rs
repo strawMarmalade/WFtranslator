@@ -33,6 +33,7 @@ impl PmcGraph{
         let mut edges: Vec<usize> = vec![];
         let mut vert_list: AdjMtx = AdjMtx::new();
         let mut currentStartVert: usize = edgs[0].0;
+        let mut now: std::time::Instant = std::time::Instant::now();
         vert_list.insert(currentStartVert, vec![]);
         for e in edgs {
             if e.0 != currentStartVert {
@@ -76,11 +77,28 @@ impl PmcGraph{
                 panic!("The node {} does not belong to this graph.", ver);
             }
         }
+        let mut elapsed_time = now.elapsed();
+        println!(
+            "Building the weird graph struct from input took {} milliseconds.",
+            elapsed_time.as_millis()
+        );
         let n = vertices.len();
         let mut g = PmcGraph { vertices: vertices, edges: edges, degree: vec![0; n-1], min_degree: 0, max_degree: 0,
             avg_degree: (0,1), is_gstats: false, max_core: 0, kcore: vec![], kcore_order: vec![]};
+        now = std::time::Instant::now();
         g.vertex_degrees();
+        elapsed_time = now.elapsed();
+        println!(
+            "Calculating degrees took {} milliseconds.",
+            elapsed_time.as_millis()
+        );
+        now = std::time::Instant::now();
         g.compute_cores();
+        elapsed_time = now.elapsed();
+        println!(
+            "Computing cores took {} milliseconds.",
+            elapsed_time.as_millis()
+        );
         g
 
     }
@@ -151,7 +169,7 @@ impl PmcGraph{
             bin[self.kcore[v]] += 1;
         }
 
-        for d in (1..md).rev() {
+        for d in (2..=md).rev() {
             bin[d] = bin[d-1];
         }
         bin[0] = 1;
@@ -172,7 +190,7 @@ impl PmcGraph{
                 if self.kcore[u] > self.kcore[v] {
                     du = self.kcore[u];   
                     pu = pos[u];
-                    pw = bin[du];    
+                    pw = bin[du];
                     w = self.kcore_order[pw];
                     if u != w {
                         pos[u] = pw;   

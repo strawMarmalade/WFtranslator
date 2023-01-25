@@ -217,8 +217,8 @@ fn main() {
     let verts: Vec<usize> = (0..AMOUNT).collect();
     let mut edgs: Vec<(usize,usize)> = vec![];
 
-    let path = "matrix2.txt";
-    let mut output = File::create(path).unwrap();
+    //let path = "matrix2.txt";
+    //let mut output = File::create(path).unwrap();
 
     now = std::time::Instant::now();
     for j in 0..AMOUNT {
@@ -228,16 +228,27 @@ fn main() {
             //println!("{}", dist);
             if dist >= 1.0/100.0 {
                 edgs.push((j,k));
-                write!(output, "{} {}\n", (k+1).to_string(), (j+1).to_string()).unwrap();
+                //write!(output, "{} {}\n", (k+1).to_string(), (j+1).to_string()).unwrap();
                 //graph.insert_edge((k + 1, j + 1));
                 //graph.insert_edge((j + 1, k + 1));
             }
         }
     }
+    elapsed_time = now.elapsed();
+    println!(
+        "Calculating the edges took {} milliseconds.",
+        elapsed_time.as_millis()
+    );
 
     let graph: PmcGraph = PmcGraph::new(verts, edgs);
+    now = std::time::Instant::now();
     let clique = graph.search_bounds();
     println!("Clique is {:?}", clique);
+    elapsed_time = now.elapsed();
+    println!(
+        "Finding max clique took {} milliseconds.",
+        elapsed_time.as_millis()
+    );
 
 
     elapsed_time = now.elapsed();
