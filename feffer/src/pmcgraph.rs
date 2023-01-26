@@ -4,7 +4,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::sync::{Arc, Barrier, Mutex};
 use threadpool::ThreadPool;
-
+use rayon::prelude::*;
+use parking_lot::RwLock;
 
 /* this is the node amount bound. If we have more than 4_294_967_295 many nodes, change this to usize/u64 */
 type NAB = u32;
@@ -224,32 +225,25 @@ impl PmcGraph{
         let order = &self.kcore_order;
         let degree = &self.degree;
 
-        let mut clique: Vec<NAB> = vec![];
-        let mut c_max: Vec<NAB>  = vec![];
-        //let mut X: Vec<usize> = vec![];
+
         let ub = self.max_core + 1;
-        let mut pairs: Vec<(NAB,NAB)> = vec![];
-        //let mut T: Vec<Vertex> = vec![];
-        let mut ind: Vec<bool> = vec![false; n-1];
         let mut found_ub = false;
 
-        let mut v: NAB;
+        let mut clique: Vec<NAB> = vec![];
+        let mut c_max: Vec<NAB>  = vec![];
+        let mut pairs: Vec<(NAB,NAB)> = vec![];
+
         let mut mc_prev: NAB = 0;
         let mut mc: NAB = 0;
         let mut mc_cur: NAB = 0;
 
-        // let lock = Arc::new(AtomicBool::new(false)); // value answers "am I locked?"
-        // let n_workers = *n;
-        // let n_jobs = *n-1;
-        // let pool = ThreadPool::new(n_workers);
-        // let barrier = Arc::new(Barrier::new(n_jobs + 1));
-
         /* here start threads */
-        for i in (0..n-1).rev() {
+        for w in order.into_iter().rev() {
             if found_ub {
                 continue;
             }
-            v = order[i];
+            //v = order[i];
+            let v = *w;
             mc_cur = mc;
             mc_prev = mc_cur;
 
@@ -265,11 +259,8 @@ impl PmcGraph{
                     /* If I want to get exactly the same result as the actual
                     pmc code I need to do stable sort and make pmc do stable sort as well */
                     pairs.sort_unstable_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-                    // for jjj in 0..P.len(){
-                    //     println!("id:{} b:{}", P[jjj].id, P[jjj].b);
-                    // }
                     self.branch(&mut pairs, 1, &mut mc_cur, &mut clique);
-                    
+
                     if mc_cur > mc_prev{
                         if mc < mc_cur {
                             /* Here have to make sure if multiple threads it wont kill itself */
@@ -285,7 +276,7 @@ impl PmcGraph{
                         }
                     }
                 }
-                clique= vec![];
+                clique = vec![];
                 pairs = vec![];
             }
         }
@@ -325,26 +316,8 @@ impl PmcGraph{
                     }
                 }
             }
-            // for j in verts[u as usize]..verts[u as usize +1] {
-            //     ind[edgs[j as usize] as usize] = false;
-            // }
-            // for j in verts[u as usize]..verts[u as usize +1] {
-            //     ind[edgs[j as usize] as usize] = true;
-            // }
-            // let indices: Vec<NAB> = (verts[u as usize]..verts[u as usize +1]).map(|j| edgs[j as usize]).collect();
+            drop(ind);
 
-            // let mut remain: Vec<(NAB,NAB)>  = vec![];
-            // for i in 0..pairs.len() {
-            //     let pair_obj = pairs[i as usize].0;
-            //     if indices.contains(&pair_obj) {
-            //         if kcores[pair_obj as usize] > *mc {
-            //             remain.push(pairs[i as usize].clone());
-            //         }
-            //     }
-            // }
-            // for j in verts[u as usize]..verts[u as usize +1] {
-            //     ind[edgs[j as usize] as usize] = false;
-            // }
             let mc_prev = mc.clone();
             self.branch(&mut remain, sz+1, mc, cliq);
 
