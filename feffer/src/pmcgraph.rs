@@ -263,15 +263,13 @@ impl PmcGraph{
                         /* I keep the old value, let the branch function modify
                         a copy of it */
                         let mut mc_cur_mut = mc_cur.clone();
-                        self.branch(&mut pairs, 1, &mut mc_cur_mut, &mut clique);
+                        self.branch(&pairs, 1, &mut mc_cur_mut, &mut clique);
                         /* If this branch func did better than before, send this to the receiver */
                         if mc_cur_mut > mc_cur {
                             clique.push(v);
                             sender.send((mc_cur_mut, clique)).unwrap();
                         }
                     }
-                    // clique = vec![];
-                    // pairs = vec![];
                 }
             }
         });
@@ -286,16 +284,16 @@ impl PmcGraph{
             largest clique */
             if len < reslen as usize {
                 /* Edit the maxclique size*/
-                let mut mc_mut = *mc_glo.write();
-                mc_mut = reslen;
-                drop(mc_mut);
+                let mut _mc_mut = *mc_glo.write();
+                _mc_mut = reslen;
+                drop(_mc_mut);
 
                 c_max = results.1.clone();
                 /* Note that we set the value of mc to be mc_cur
                 and only this thread can edit, so this is okay */
                 if reslen >= ub {
-                    let mut found_ub_mut = *found_ub_glo.write();
-                    found_ub_mut = true;
+                    let mut _found_ub_mut = *found_ub_glo.write();
+                    _found_ub_mut = true;
                 }
                 println!("{}", c_max.len());
             }
@@ -304,9 +302,9 @@ impl PmcGraph{
         c_max
     }
 
-    pub fn branch(&self, pairs: &mut Vec<(NAB,NAB)>, sz: NAB, mc: &mut NAB, cliq: &mut Vec<NAB>){
+    pub fn branch(&self, pairs: &Vec<(NAB,NAB)>, sz: NAB, mc: &mut NAB, cliq: &mut Vec<NAB>){
         if pairs.len() > 0{
-            let u = pairs.pop().unwrap().0;
+            let u = pairs[pairs.len()-1].0;
             let verts = &self.vertices;
             let edgs = &self.edges;
             let kcores = &self.kcore;
@@ -338,9 +336,10 @@ impl PmcGraph{
                 }
             }
             drop(ind);
+            drop(pairs);
 
             let mc_prev = mc.clone();
-            self.branch(&mut remain, sz+1, mc, cliq);
+            self.branch(&remain, sz+1, mc, cliq);
 
             if *mc > mc_prev {
                 cliq.push(u);

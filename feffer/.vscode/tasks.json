@@ -2,7 +2,7 @@
     "tasks": [
         {
             "type": "cargo",
-            "label": "cargo build",
+            "label": "lldb cargo",
             "command": "cargo",
             "args": [
                 "build",

@@ -1,13 +1,11 @@
 use ndarray::{self, Array1};
 use rand::SeedableRng;
 use rand::{self, distributions, prelude::Distribution};
-use std::f32;
-use std::fs::File;
-use std::io::Write;
+// use std::f32;
+// use std::fs::File;
+// use std::io::Write;
 use rand_chacha::ChaCha8Rng;
-use threadpool::ThreadPool;
-
-extern crate num_cpus;
+//use threadpool::ThreadPool;
 
 //use std::time;
 mod pmcgraph;
@@ -206,7 +204,6 @@ fn find_disc(x0_point: &Array1<f32>, x_vals: &[Array1<f32>], n: u32) -> Vec<Arra
 }
 
 fn main() {
-    let numcpus = num_cpus::get();
     let range: distributions::Uniform<f32> = distributions::Uniform::from(0.0..1.0);
     // let mut rng: rand::rngs::ThreadRng = rand::thread_rng();
     const AMOUNT: usize = 5000;
@@ -220,8 +217,8 @@ fn main() {
         elapsed_time.as_millis()
     );
 
-    let verts: Vec<u32> = (0..5000).collect();
-    let mut edgs: Vec<(u32,u32)> = vec![];
+    let verts: Vec<NAB> = (0..5000).collect();
+    let mut edgs: Vec<(NAB,NAB)> = vec![];
 
     //let path = "matrix2.txt";
     //let mut output = File::create(path).unwrap();
@@ -233,7 +230,7 @@ fn main() {
             let dist: f32 = diff.dot(&diff);
             //println!("{}", dist);
             if dist >= 1.0/100.0 {
-                edgs.push((j as u32,k as u32));
+                edgs.push((j as NAB,k as NAB));
                 //write!(output, "{} {}\n", (k+1).to_string(), (j+1).to_string()).unwrap();
                 //graph.insert_edge((k + 1, j + 1));
                 //graph.insert_edge((j + 1, k + 1));
@@ -255,14 +252,6 @@ fn main() {
         "Finding max clique took {} milliseconds.",
         elapsed_time.as_millis()
     );
-
-
-    elapsed_time = now.elapsed();
-    println!(
-        "Generating graph took {} milliseconds.",
-        elapsed_time.as_millis()
-    );
-
     // now = std::time::Instant::now();
     // //let max_clique = solve_branch_and_bound(&graph);
     // //let _nodes_of_clique = max_clique.nodes();
