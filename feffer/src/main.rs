@@ -252,24 +252,4 @@ fn main() {
         "Finding max clique took {} milliseconds.",
         elapsed_time.as_millis()
     );
-    // now = std::time::Instant::now();
-    // //let max_clique = solve_branch_and_bound(&graph);
-    // //let _nodes_of_clique = max_clique.nodes();
-    // elapsed_time = now.elapsed();
-    // println!(
-    //     "Generating max clique took {} seconds.",
-    //     elapsed_time.as_secs()
-    // );
-
-    // let xs: Array1<f32> = range.sample_iter(&mut rng).take(DIM).collect();
-    // let mut now: std::time::Instant = std::time::Instant::now();
-    // let res1: Vec<ndarray::ArrayBase<ndarray::OwnedRepr<f32>, ndarray::Dim<[usize; 1]>>> = find_disc(&xs, &x_vals, 60);
-    // let elapsed_time = now.elapsed();
-    // println!("Running slow_function() took {} seconds.", elapsed_time.as_millis());
-    // now = std::time::Instant::now();
-    // let res2: Vec<ndarray::ArrayBase<ndarray::OwnedRepr<f32>, ndarray::Dim<[usize; 1]>>> = find_disc2(&xs, &x_vals, 60);
-    // let elapsed_time = now.elapsed();
-
-    // println!("Running slow_function() took {} seconds.", elapsed_time.as_millis());
-    // println!("First objects are {:?} and {:?}", res1[0], res2[0])
 }

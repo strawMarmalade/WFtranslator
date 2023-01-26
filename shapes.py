@@ -645,8 +645,9 @@ np.random.seed(43)
 
 data = generateWFData(amount=10)
 
-tic = time.perf_counter()
-feffer.submanifoldInterpolation(4, 200, data)
-toc = time.perf_counter()
-print(f"Submanifold find took {toc - tic:0.4f} seconds\n")
+
+# tic = time.perf_counter()
+# feffer.submanifoldInterpolation(4, 200, data)
+# toc = time.perf_counter()
+# print(f"Submanifold find took {toc - tic:0.4f} seconds\n")
 
