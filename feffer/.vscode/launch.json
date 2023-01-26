@@ -1,0 +1,7 @@
+{
+    "name": "Launch",
+    "type": "lldb",
+    "request": "launch",
+    "program": "${workspaceFolder}/target/debug/feffer",
+    //"args": ["-arg1", "-arg2"],
+}

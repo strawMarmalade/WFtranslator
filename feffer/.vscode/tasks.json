@@ -1,0 +1,22 @@
+{
+    "tasks": [
+        {
+            "type": "cargo",
+            "label": "cargo build",
+            "command": "cargo",
+            "args": [
+                "build",
+                //"make"
+            ],
+            "options": {
+                "cwd": "${fileDirname}"
+            },
+            //"detail": "compiler: bash",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ],
+    "version": "2.0.0"
+}
