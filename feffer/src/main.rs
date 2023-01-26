@@ -7,7 +7,8 @@ use ndarray::{self, Array1};
 //use rand_chacha::ChaCha8Rng;
 //use threadpool::ThreadPool;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
+use std::env;
 
 //use std::time;
 mod pmcgraph;
@@ -18,9 +19,7 @@ mod pmcgraph;
 //use crate::graph::Graph;
 use crate::pmcgraph::PmcGraph;
 
-
 type NAB = u32;
-static DIM: usize = 2;
 
 // /// Solves the maximum clique problem by using a branch and bound.
 // pub fn solve_branch_and_bound(graph: &Graph) -> Graph {
@@ -136,76 +135,88 @@ static DIM: usize = 2;
 //     f32::abs(x_point.dot(q_point)/x_point.dot(x_point))
 // }
 
-#[allow(dead_code)]
-fn mu(x_point: &Array1<f32>, q_point: &Array1<f32>) -> f32 {
-    let diff: Array1<f32> = x_point - q_point;
-    let dist: f32 = diff.dot(&diff);
-    (1.0 / (dist - 1.0 / 3.0)).exp()
-        / ((1.0 / (dist - 1.0 / 3.0)).exp() + (1.0 / (1.0 / 2.0 - dist)).exp())
-}
-#[allow(dead_code)]
-fn calc_dist_from1(x0_point: &Array1<f32>, x_point: &Array1<f32>, y_vals: &[Array1<f32>]) -> f32 {
-    if y_vals.len() != 0 {
-        let max_y: f32 = y_vals
-            .into_iter()
-            .map(|y| f32::abs(x_point.dot(y) / x_point.dot(x_point)))
-            .reduce(f32::max)
-            .unwrap();
-        max_y.max(f32::abs(
-            1.0 - (x0_point - x_point).dot(&(x0_point - x_point)),
-        ))
-    } else {
-        f32::abs(1.0 - (x0_point - x_point).dot(&(x0_point - x_point)))
-    }
-}
+// #[allow(dead_code)]
+// fn mu(x_point: &Array1<f32>, q_point: &Array1<f32>) -> f32 {
+//     let diff: Array1<f32> = x_point - q_point;
+//     let dist: f32 = diff.dot(&diff);
+//     (1.0 / (dist - 1.0 / 3.0)).exp()
+//         / ((1.0 / (dist - 1.0 / 3.0)).exp() + (1.0 / (1.0 / 2.0 - dist)).exp())
+// }
+// #[allow(dead_code)]
+// fn calc_dist_from1(x0_point: &Array1<f32>, x_point: &Array1<f32>, y_vals: &[Array1<f32>]) -> f32 {
+//     if y_vals.len() != 0 {
+//         let max_y: f32 = y_vals
+//             .into_iter()
+//             .map(|y| f32::abs(x_point.dot(y) / x_point.dot(x_point)))
+//             .reduce(f32::max)
+//             .unwrap();
+//         max_y.max(f32::abs(
+//             1.0 - (x0_point - x_point).dot(&(x0_point - x_point)),
+//         ))
+//     } else {
+//         f32::abs(1.0 - (x0_point - x_point).dot(&(x0_point - x_point)))
+//     }
+// }
 
-#[allow(dead_code)]
-fn argmin(nets: &Vec<f32>) -> usize {
-    *nets
-        .iter()
-        .enumerate()
-        .min_by(|(_, a), (_, b)| a.total_cmp(b))
-        .map(|(index, _)| index)
-        .get_or_insert(0_usize)
-}
+// #[allow(dead_code)]
+// fn argmin(nets: &Vec<f32>) -> usize {
+//     *nets
+//         .iter()
+//         .enumerate()
+//         .min_by(|(_, a), (_, b)| a.total_cmp(b))
+//         .map(|(index, _)| index)
+//         .get_or_insert(0_usize)
+// }
 
-#[allow(dead_code)]
-fn find_disc2(x0_point: &Array1<f32>, x_vals: &[Array1<f32>], n: u32) -> Vec<Array1<f32>> {
-    let mut output: Vec<Array1<f32>> = vec![];
-    for _i in 0..n {
-        output.append(&mut vec![x_vals[argmin(
-            &mut x_vals
-                .into_iter()
-                .map(|x| calc_dist_from1(x0_point, x, &output))
-                .collect::<Vec<f32>>(),
-        )]
-        .clone()]);
-    }
-    output
-}
+// #[allow(dead_code)]
+// fn find_disc2(x0_point: &Array1<f32>, x_vals: &[Array1<f32>], n: u32) -> Vec<Array1<f32>> {
+//     let mut output: Vec<Array1<f32>> = vec![];
+//     for _i in 0..n {
+//         output.append(&mut vec![x_vals[argmin(
+//             &mut x_vals
+//                 .into_iter()
+//                 .map(|x| calc_dist_from1(x0_point, x, &output))
+//                 .collect::<Vec<f32>>(),
+//         )]
+//         .clone()]);
+//     }
+//     output
+// }
 
-#[allow(dead_code)]
-fn find_disc(x0_point: &Array1<f32>, x_vals: &[Array1<f32>], n: u32) -> Vec<Array1<f32>> {
-    let mut output: Vec<Array1<f32>> = vec![];
-    for _i in 0..n {
-        let distance_vec: Vec<f32> = x_vals
-            .into_iter()
-            .map(|x| calc_dist_from1(x0_point, x, &output))
-            .collect::<Vec<f32>>();
-        let mut current_min: f32 = distance_vec[0];
-        let mut current_index: usize = 0;
-        for j in 0..distance_vec.len() {
-            if distance_vec[j] < current_min {
-                current_index = j;
-                current_min = distance_vec[j];
-            }
-        }
-        output.append(&mut vec![x_vals[current_index].clone()]);
-    }
-    output
-}
+// #[allow(dead_code)]
+// fn find_disc(x0_point: &Array1<f32>, x_vals: &[Array1<f32>], n: u32) -> Vec<Array1<f32>> {
+//     let mut output: Vec<Array1<f32>> = vec![];
+//     for _i in 0..n {
+//         let distance_vec: Vec<f32> = x_vals
+//             .into_iter()
+//             .map(|x| calc_dist_from1(x0_point, x, &output))
+//             .collect::<Vec<f32>>();
+//         let mut current_min: f32 = distance_vec[0];
+//         let mut current_index: usize = 0;
+//         for j in 0..distance_vec.len() {
+//             if distance_vec[j] < current_min {
+//                 current_index = j;
+//                 current_min = distance_vec[j];
+//             }
+//         }
+//         output.append(&mut vec![x_vals[current_index].clone()]);
+//     }
+//     output
+// }
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    let file_path = &args[1];
+    let do_i_chunk = &args[2].parse::<usize>().unwrap();
+    let mut split_yes = false;
+    let mut split_size: NAB = 0;
+
+    if *do_i_chunk == 1 {
+        split_yes = true;
+        let chunk_size = &args[3].parse::<usize>().unwrap();
+        split_size = *chunk_size as NAB;
+    }
     // let range: distributions::Uniform<f32> = distributions::Uniform::from(0.0..1.0);
     // // let mut rng: rand::rngs::ThreadRng = rand::thread_rng();
     // const AMOUNT: usize = 5000;
@@ -219,9 +230,8 @@ fn main() {
     //     elapsed_time.as_millis()
     // );
     let mut now = std::time::Instant::now();
-    let split_size: NAB = 5000;
 
-    let f = BufReader::new(File::open("/home/leo/Documents/work/WFtranslator/feffer/dataMat10.txt").unwrap());
+    let f = BufReader::new(File::open(file_path).unwrap());
 
     let arr: Vec<Array1<f32>> = f.lines()
         .map(|l| l
@@ -232,15 +242,14 @@ fn main() {
         )
         .collect();
     let mut elapsed_time = now.elapsed();
-    println!(
-        "Reading the file of points took {} milliseconds.",
-        elapsed_time.as_millis()
-    );
     let len = arr.len();
-    let split_yes = true;
+    println!(
+        "Reading the file of points took {} milliseconds and we have {} many points",
+        elapsed_time.as_millis(), len
+    );
     let divisor_r: f32 = 200.0;
     if split_yes {
-        println!("We are in chunking mode");
+        println!("We are in chunking mode with chunk size {}", split_size);
         let amt_splits = f32::ceil((len as f32)/(split_size as f32)) as NAB;
     
         // let path = "matrix3.txt";
@@ -258,7 +267,7 @@ fn main() {
                         let v1 = &arr[(j+split_size*cur_split) as usize];
                         let v2 = &arr[(k+split_size*cur_split) as usize];
                         let diff: Array1<f32> = (v1 - v2).iter().map(|coord| *coord/divisor_r).collect();
-                        let dist: f32 = diff.dot(&diff);
+                        let dist: f32 = f32::sqrt(diff.dot(&diff));
                         if dist >= 1.0/100.0 {
                             //write!(output, "{} {}\n", (k+1).to_string(), (j+1).to_string()).unwrap();
                             edgs.push((j,k));
@@ -282,7 +291,7 @@ fn main() {
                         let v1 = &arr[(j+split_size*cur_split) as usize];
                         let v2 = &arr[(k+split_size*cur_split) as usize];
                         let diff: Array1<f32> = (v1 - v2).iter().map(|coord| *coord/divisor_r).collect();
-                        let dist: f32 = diff.dot(&diff);
+                        let dist: f32 = f32::sqrt(diff.dot(&diff));
                         if dist >= 1.0/100.0 {
                             //write!(output, "{} {}\n", (k+1).to_string(), (j+1).to_string()).unwrap();
                             edgs.push((j,k));
@@ -312,7 +321,7 @@ fn main() {
                 let v1 = &arr[collected_verts[j] as usize];
                 let v2 = &arr[collected_verts[k] as usize];
                 let diff: Array1<f32> = (v1 - v2).iter().map(|coord| *coord/divisor_r).collect();
-                let dist: f32 = diff.dot(&diff);
+                let dist: f32 = f32::sqrt(diff.dot(&diff));
                 if dist >= 1.0/100.0 {
                     col_edgs.push((j as NAB, k as NAB));
                 }
@@ -349,17 +358,17 @@ fn main() {
         let verts: Vec<NAB> = (0..(len as NAB)).collect();
         let mut edgs: Vec<(NAB,NAB)> = vec![];
     
-        //let path = "matrix2.txt";
-        //let mut output = File::create(path).unwrap();
-        let now_glo = std::time::Instant::now();
+        // let path = "matrix10.txt";
+        // let mut output = File::create(path).unwrap();
 
+        let now_glo = std::time::Instant::now();
         let mut now = std::time::Instant::now();
         for j in 0..len {
             for k in 0..j {
                 let v1 = &arr[j];
                 let v2 = &arr[k];
                 let diff: Array1<f32> = (v1 - v2).iter().map(|coord| *coord/divisor_r).collect();
-                let dist: f32 = diff.dot(&diff);
+                let dist: f32 = f32::sqrt(diff.dot(&diff));
                 if dist >= 1.0/100.0 {
                     edgs.push((j as NAB,k as NAB));
                 }

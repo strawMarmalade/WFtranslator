@@ -643,11 +643,21 @@ def generateWFData(amount = 100, N=201):
 
 np.random.seed(43)
 
-amount = 8
+amount = 19
 
 data = generateWFData(amount=amount)
-np.savetxt(f"dataMat{amount}.txt", data, delimiter=' ', newline='\n', fmt='%d')
+np.savetxt(f"Heu{amount}.txt", data, delimiter=' ', newline='\n', fmt='%d')
+# edgs = []
 
+
+# edgs2 = [f"{k:d} {j:d}" if np.linalg.norm((data[k]-data[j])) >= 2 else '' for j in range(len(data)) for k in range(j)]
+
+# # for j in range(len(data)):
+# #     for k in range(j):
+# #         if np.linalg.norm((data[k]-data[j])/200) >= 1/100:
+# #             edgs.append((k,j))
+# #edgArr = np.array(edgs2)
+# np.savetxt(f"Full{amount}.txt", edgs2, newline='\n', fmt='%s')
 
 # tic = time.perf_counter()
 # feffer.submanifoldInterpolation(4, 200, data)
