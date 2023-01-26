@@ -1,0 +1,53 @@
+#!/bin/bash
+#SBATCH --job-name=HeuVsPmc
+#SBATCH --nodes=1
+#SBATCH --ntasks=36
+#SBATCH --cpus-per-task=72
+#SBATCH --gpus-per-task=1
+#SBATCH --partition=gpu
+#SBATCH --time=04:00:00
+ 
+# Execute program located in $HOME
+#srun $HOME/pmc/pmc -f $HOME/matrix.txt -a 0 > $HOME/result.txt
+
+
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu2.txt 0 5000 > $HOME/heu2_0.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu2.txt 1 2000 > $HOME/heu2_1_2000.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu2.txt 1 5000 > $HOME/heu2_1_5000.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu2.txt 1 10000 > $HOME/heu2_1_10000.txt
+
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu4.txt 0 5000 > $HOME/heu4_0.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu4.txt 1 2000 > $HOME/heu4_1_2000.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu4.txt 1 5000 > $HOME/heu4_1_5000.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu4.txt 1 10000 > $HOME/heu4_1_10000.txt
+
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu8.txt 0 5000 > $HOME/heu8_0.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu8.txt 1 2000 > $HOME/heu8_1_2000.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu8.txt 1 5000 > $HOME/heu8_1_5000.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu8.txt 1 10000 > $HOME/heu8_1_10000.txt
+
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu11.txt 0 5000 > $HOME/heu11_0.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu11.txt 1 2000 > $HOME/heu11_1_2000.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu11.txt 1 5000 > $HOME/heu11_1_5000.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu11.txt 1 10000 > $HOME/heu11_1_10000.txt
+
+
+srun $HOME/pmcVsHeu/pmcjingold/build/pmc_main -f $HOME/pmcVsHeu/Heu2.txt -a 0 > $HOME/pmc2.txt
+srun $HOME/pmcVsHeu/pmcjingold/build/pmc_main -f $HOME/pmcVsHeu/Heu4.txt -a 0 > $HOME/pmc4.txt
+
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu16.txt 0 5000 > $HOME/heu16_0.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu16.txt 1 2000 > $HOME/heu16_1_2000.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu16.txt 1 5000 > $HOME/heu16_1_5000.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu16.txt 1 10000 > $HOME/heu16_1_10000.txt
+
+
+srun $HOME/pmcVsHeu/pmcjingold/build/pmc_main -f $HOME/pmcVsHeu/Heu8.txt -a 0 > $HOME/pmc8.txt
+srun $HOME/pmcVsHeu/pmcjingold/build/pmc_main -f $HOME/pmcVsHeu/Heu11.txt -a 0 > $HOME/pmc11.txt
+
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu19.txt 0 5000 > $HOME/heu19_0.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu19.txt 1 2000 > $HOME/heu19_1_2000.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu19.txt 1 5000 > $HOME/heu19_1_5000.txt
+srun $HOME/pmcVsHeu/feffer/target/release/feffer $HOME/pmcVsHeu/Heu19.txt 1 10000 > $HOME/heu19_1_10000.txt
+
+srun $HOME/pmcVsHeu/pmcjingold/build/pmc_main -f $HOME/pmcVsHeu/Heu16.txt -a 0 > $HOME/pmc16.txt
+srun $HOME/pmcVsHeu/pmcjingold/build/pmc_main -f $HOME/pmcVsHeu/Heu19.txt -a 0 > $HOME/pmc19.txt
