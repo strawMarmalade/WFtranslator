@@ -1,11 +1,13 @@
 use ndarray::{self, Array1};
-use rand::SeedableRng;
-use rand::{self, distributions, prelude::Distribution};
+// use rand::SeedableRng;
+// use rand::{self, distributions, prelude::Distribution};
 // use std::f32;
 // use std::fs::File;
 // use std::io::Write;
-use rand_chacha::ChaCha8Rng;
+//use rand_chacha::ChaCha8Rng;
 //use threadpool::ThreadPool;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 
 //use std::time;
 mod pmcgraph;
@@ -204,40 +206,47 @@ fn find_disc(x0_point: &Array1<f32>, x_vals: &[Array1<f32>], n: u32) -> Vec<Arra
 }
 
 fn main() {
-    let range: distributions::Uniform<f32> = distributions::Uniform::from(0.0..1.0);
-    // let mut rng: rand::rngs::ThreadRng = rand::thread_rng();
-    const AMOUNT: usize = 5000;
-    let mut rng = ChaCha8Rng::seed_from_u64(42);
-    let mut now: std::time::Instant = std::time::Instant::now();
-    let x_vals: [Array1<f32>; AMOUNT] =
-        [(); AMOUNT].map(|_| range.sample_iter(&mut rng).take(DIM).collect());
-    let mut elapsed_time = now.elapsed();
-    println!(
-        "Generating random points took {} milliseconds.",
-        elapsed_time.as_millis()
-    );
+    // let range: distributions::Uniform<f32> = distributions::Uniform::from(0.0..1.0);
+    // // let mut rng: rand::rngs::ThreadRng = rand::thread_rng();
+    // const AMOUNT: usize = 5000;
+    // let mut rng = ChaCha8Rng::seed_from_u64(42);
+    // let mut now: std::time::Instant = std::time::Instant::now();
+    // let x_vals: [Array1<f32>; AMOUNT] =
+    //     [(); AMOUNT].map(|_| range.sample_iter(&mut rng).take(DIM).collect());
+    // let mut elapsed_time = now.elapsed();
+    // println!(
+    //     "Generating random points took {} milliseconds.",
+    //     elapsed_time.as_millis()
+    // );
+    let f = BufReader::new(File::open("/home/leo/Documents/work/WFtranslator/dataMat.txt").unwrap());
 
-    let verts: Vec<NAB> = (0..5000).collect();
+    let arr: Vec<Array1<f32>> = f.lines()
+        .map(|l| l
+            .unwrap()
+            .split_whitespace()
+            .map(|number| number.parse().unwrap())
+            .collect()
+        )
+        .collect();
+    
+    let len = arr.len();
+    let verts: Vec<NAB> = (0..(len as NAB)).collect();
     let mut edgs: Vec<(NAB,NAB)> = vec![];
 
     //let path = "matrix2.txt";
     //let mut output = File::create(path).unwrap();
 
-    now = std::time::Instant::now();
-    for j in 0..5000 {
+    let mut now = std::time::Instant::now();
+    for j in 0..len {
         for k in 0..j {
-            let diff: Array1<f32> = x_vals[j].clone() - x_vals[k].clone();
+            let diff: Array1<f32> = (arr[j].clone() - arr[k].clone()).iter().map(|coord| *coord/200.0).collect();
             let dist: f32 = diff.dot(&diff);
-            //println!("{}", dist);
             if dist >= 1.0/100.0 {
                 edgs.push((j as NAB,k as NAB));
-                //write!(output, "{} {}\n", (k+1).to_string(), (j+1).to_string()).unwrap();
-                //graph.insert_edge((k + 1, j + 1));
-                //graph.insert_edge((j + 1, k + 1));
             }
         }
     }
-    elapsed_time = now.elapsed();
+    let mut elapsed_time = now.elapsed();
     println!(
         "Calculating the edges took {} milliseconds.",
         elapsed_time.as_millis()
