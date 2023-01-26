@@ -1,11 +1,13 @@
 //use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread;
-use std::sync::{Arc, Barrier, Mutex};
-use threadpool::ThreadPool;
+//use std::sync::atomic::{AtomicBool, Ordering};
+// use std::thread;
+// use std::sync::{Arc, Barrier, Mutex};
+// use threadpool::ThreadPool;
 use rayon::prelude::*;
 use parking_lot::RwLock;
+use std::sync::mpsc::channel;
+use std::sync::mpsc::{Sender, Receiver};
 
 /* this is the node amount bound. If we have more than 4_294_967_295 many nodes, change this to usize/u64 */
 type NAB = u32;
@@ -219,7 +221,6 @@ impl PmcGraph{
     }
     pub fn search_bounds(& self) -> Vec<NAB> {
         let verts = &self.vertices;
-        let n = verts.len();
         let edgs = &self.edges;
         let kcores = &self.kcore;
         let order = &self.kcore_order;
@@ -227,58 +228,78 @@ impl PmcGraph{
 
 
         let ub = self.max_core + 1;
-        let mut found_ub = false;
+        let found_ub_glo = RwLock::new(false);
 
-        let mut clique: Vec<NAB> = vec![];
-        let mut c_max: Vec<NAB>  = vec![];
-        let mut pairs: Vec<(NAB,NAB)> = vec![];
+        let mc_glo: RwLock<NAB> = RwLock::new(0);
 
-        let mut mc_prev: NAB = 0;
-        let mut mc: NAB = 0;
-        let mut mc_cur: NAB = 0;
+        let (sender_glo, receiver): (Sender<(NAB, Vec<NAB>)>, Receiver<(NAB, Vec<NAB>)>) = channel();
 
         /* here start threads */
-        for w in order.into_iter().rev() {
-            if found_ub {
-                continue;
-            }
-            //v = order[i];
-            let v = *w;
-            mc_cur = mc;
-            mc_prev = mc_cur;
-
-            if kcores[v as usize] > mc {
-                for j in verts[v as usize]..verts[v as usize + 1] {
-                    if kcores[edgs[j as usize] as usize] > mc {
-                        pairs.push((edgs[j as usize], degree[edgs[j as usize] as usize]));
-                    }
-                }
-                /*sort_by(|a, b| a.partial_cmp(b).unwrap());
-                assert_eq!(floats, */
-                if pairs.len() > mc_cur as usize{
-                    /* If I want to get exactly the same result as the actual
-                    pmc code I need to do stable sort and make pmc do stable sort as well */
-                    pairs.sort_unstable_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-                    self.branch(&mut pairs, 1, &mut mc_cur, &mut clique);
-
-                    if mc_cur > mc_prev{
-                        if mc < mc_cur {
-                            /* Here have to make sure if multiple threads it wont kill itself */
-                            if mc < mc_cur {
-                                mc = mc_cur;
-                                clique.push(v);
-                                c_max = clique;
-                                if mc >= ub {
-                                    found_ub = true;
-                                }
-                                println!("{}", c_max.len());
-                            }
+        order.into_par_iter().rev().for_each_with(sender_glo,|sender, w|{
+            //let sender = sender_glo.clone();
+            let found_ub = *found_ub_glo.read();
+            if !found_ub {
+                drop(found_ub);
+                //v = order[i];
+                let v = *w;
+                let mut pairs: Vec<(NAB,NAB)> = vec![];
+                let mut clique: Vec<NAB> = vec![];
+                
+                let mc = *mc_glo.read();
+                if kcores[v as usize] > mc {
+                    for j in verts[v as usize]..verts[v as usize + 1] {
+                        if kcores[edgs[j as usize] as usize] > mc {
+                            pairs.push((edgs[j as usize], degree[edgs[j as usize] as usize]));
                         }
                     }
+                    /* Current largest clique size */
+                    let mc_cur = mc.clone();
+                    drop(mc);
+
+                    if pairs.len() > mc_cur as usize{
+                        /* If I want to get exactly the same result as the actual
+                        pmc code I need to do stable sort and make pmc do stable sort as well */
+                        pairs.sort_unstable_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                        /* I keep the old value, let the branch function modify
+                        a copy of it */
+                        let mut mc_cur_mut = mc_cur.clone();
+                        self.branch(&mut pairs, 1, &mut mc_cur_mut, &mut clique);
+                        /* If this branch func did better than before, send this to the receiver */
+                        if mc_cur_mut > mc_cur {
+                            clique.push(v);
+                            sender.send((mc_cur_mut, clique)).unwrap();
+                        }
+                    }
+                    // clique = vec![];
+                    // pairs = vec![];
                 }
-                clique = vec![];
-                pairs = vec![];
             }
+        });
+        let mut c_max: Vec<NAB>  = vec![];
+        for _ in 0..order.len() {
+            /* We block until we get something from some thread */
+            let results = receiver.recv().unwrap();
+
+            let len = c_max.len();
+            let reslen = results.0.clone();
+            /* If some thread found something better than the current 
+            largest clique */
+            if len < reslen as usize {
+                /* Edit the maxclique size*/
+                let mut mc_mut = *mc_glo.write();
+                mc_mut = reslen;
+                drop(mc_mut);
+
+                c_max = results.1.clone();
+                /* Note that we set the value of mc to be mc_cur
+                and only this thread can edit, so this is okay */
+                if reslen >= ub {
+                    let mut found_ub_mut = *found_ub_glo.write();
+                    found_ub_mut = true;
+                }
+                println!("{}", c_max.len());
+            }
+            drop(results);
         }
         c_max
     }
