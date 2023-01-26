@@ -1,4 +1,3 @@
-#%%
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings
@@ -643,9 +642,11 @@ def generateWFData(amount = 100, N=201):
     return np.array(WFData)
 
 np.random.seed(43)
-#%%
-data = generateWFData(amount=3)
-np.savetxt("dataMat.txt", data, delimiter=' ', newline='\n', fmt='%d')
+
+amount = 8
+
+data = generateWFData(amount=amount)
+np.savetxt(f"dataMat{amount}.txt", data, delimiter=' ', newline='\n', fmt='%d')
 
 
 # tic = time.perf_counter()

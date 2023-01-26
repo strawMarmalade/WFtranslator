@@ -26,7 +26,7 @@ pub struct PmcGraph{
     /* the degree of each vertex */
     degree: Vec<NAB>,
     /* the min and max degrees of the entire graph */
-    min_degree: NAB,
+    pub min_degree: NAB,
     max_degree: NAB,
     //want f64 here but can't compare those in rust with the Eq trait, so instead use a fraction and to check will have to compare values but eh 
     //avg_degree: (NAB,NAB), 
@@ -84,30 +84,24 @@ impl PmcGraph{
                 edges.extend(lst.into_iter());
                 vertices.push(edges.len());
             } else {
-                panic!("The node {} does not belong to this graph.", ver);
+                panic!("\tThe node {} does not belong to this graph.", ver);
             }
         }
         let mut elapsed_time = now.elapsed();
         println!(
-            "Building the weird graph struct from input took {} milliseconds.",
+            "\tBuilding the graph struct from input took {} milliseconds.",
             elapsed_time.as_millis()
         );
         let n = vertices.len();
         let mut g = PmcGraph { vertices: vertices, edges: edges, degree: vec![0; n-1], min_degree: 0, max_degree: 0,
             //avg_degree: (0,1), is_gstats: false, 
             max_core: 0, kcore: vec![], kcore_order: vec![]};
-        now = std::time::Instant::now();
         g.vertex_degrees();
-        elapsed_time = now.elapsed();
-        println!(
-            "Calculating degrees took {} milliseconds.",
-            elapsed_time.as_millis()
-        );
         now = std::time::Instant::now();
         g.compute_cores();
         elapsed_time = now.elapsed();
         println!(
-            "Computing cores took {} milliseconds.",
+            "\tComputing cores took {} milliseconds.",
             elapsed_time.as_millis()
         );
         g
@@ -132,7 +126,6 @@ impl PmcGraph{
         self.max_degree = max_degree;
         self.min_degree = min_degree;
         //self.avg_degree = (self.edges.len() as NAB, n as NAB);
-        return;
     }
     pub fn compute_cores(&mut self) {
         let n: usize = self.vertices.len(); 
@@ -219,13 +212,16 @@ impl PmcGraph{
         }
         self.max_core = self.kcore[self.kcore_order[n-2] as usize] - 1;
     }
-    pub fn search_bounds(& self) -> Vec<NAB> {
+    pub fn search_bounds(&self) -> Vec<NAB> {
         let verts = &self.vertices;
         let edgs = &self.edges;
         let kcores = &self.kcore;
         let order = &self.kcore_order;
         let degree = &self.degree;
 
+        let mut order_copy = order.clone();
+        drop(order);
+        let order_len = order_copy.len();
 
         let ub = self.max_core + 1;
         let found_ub_glo = RwLock::new(false);
@@ -234,14 +230,16 @@ impl PmcGraph{
 
         let (sender_glo, receiver): (Sender<(NAB, Vec<NAB>)>, Receiver<(NAB, Vec<NAB>)>) = channel();
 
+        order_copy.remove(order_len-1);
+
         /* here start threads */
-        order.into_par_iter().rev().for_each_with(sender_glo,|sender, w|{
+        order_copy.into_par_iter().rev().for_each_with(sender_glo,|sender, v|{
             //let sender = sender_glo.clone();
             let found_ub = *found_ub_glo.read();
             if !found_ub {
                 drop(found_ub);
                 //v = order[i];
-                let v = *w;
+                //let v = *w;
                 let mut pairs: Vec<(NAB,NAB)> = vec![];
                 let mut clique: Vec<NAB> = vec![];
                 
@@ -274,7 +272,7 @@ impl PmcGraph{
             }
         });
         let mut c_max: Vec<NAB>  = vec![];
-        for _ in 0..order.len() {
+        for _ in 0..(order_len-1) {
             /* We block until we get something from some thread */
             let results = receiver.recv().unwrap();
 
@@ -295,7 +293,7 @@ impl PmcGraph{
                     let mut _found_ub_mut = *found_ub_glo.write();
                     _found_ub_mut = true;
                 }
-                println!("{}", c_max.len());
+                println!("\tFound clique of len {}", c_max.len());
             }
             drop(results);
         }
