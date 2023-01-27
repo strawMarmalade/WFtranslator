@@ -3,15 +3,13 @@
         {
             "type": "cargo",
             "label": "lldb cargo",
-            "command": "cargo",
-            "args": [
-                "build",
-                //"make"
-            ],
+            "command": "build",
+            // "args": [
+            //     "build"
+            // ],
             "options": {
                 "cwd": "${fileDirname}"
             },
-            //"detail": "compiler: bash",
             "group": {
                 "kind": "build",
                 "isDefault": true

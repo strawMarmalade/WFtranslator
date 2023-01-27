@@ -9,6 +9,8 @@ use ndarray::{self, Array1};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::env;
+//use std::iter::{zip, repeat};
+use ndarray_linalg::norm::Norm;
 
 //use std::time;
 mod pmcgraph;
@@ -252,61 +254,42 @@ fn main() {
         println!("We are in chunking mode with chunk size {}", split_size);
         let amt_splits = f32::ceil((len as f32)/(split_size as f32)) as NAB;
     
-        // let path = "matrix3.txt";
-        // let mut output = File::create(path).unwrap();
-    
         let mut collected_verts: Vec<NAB> = vec![];
         let now_glo = std::time::Instant::now();
         now = std::time::Instant::now();
+
         for cur_split in 0..amt_splits {
-            if cur_split != amt_splits -1 {
-                let mut edgs: Vec<(NAB,NAB)> = vec![];
-                let verts = (0..split_size).collect();
-                for j in 0..split_size {
-                    for k in 0..j {
-                        let v1 = &arr[(j+split_size*cur_split) as usize];
-                        let v2 = &arr[(k+split_size*cur_split) as usize];
-                        let diff: Array1<f32> = (v1 - v2).iter().map(|coord| *coord/divisor_r).collect();
-                        let dist: f32 = f32::sqrt(diff.dot(&diff));
-                        if dist >= 1.0/100.0 {
-                            //write!(output, "{} {}\n", (k+1).to_string(), (j+1).to_string()).unwrap();
-                            edgs.push((j,k));
-                        }
-                    }
-                }
-                let graph = PmcGraph::new(verts, edgs);
-                let now2 = std::time::Instant::now();
-                collected_verts.extend(graph.search_bounds().into_iter().map(|val| val+split_size*cur_split));
-                elapsed_time = now2.elapsed();
-                println!(
-                    "\tIt took {} milliseconds to compute the clique in chunk {}",
-                    elapsed_time.as_millis(), cur_split
-                );
+            let mut edgs: Vec<(NAB,NAB)> = vec![];
+            let mut verts: Vec<NAB>;
+            let mut max_j: NAB;
+            if cur_split < amt_splits - 1 {
+                verts = (0..split_size).collect();
+                max_j = split_size;
             }
             else {
-                let verts: Vec<NAB> = (0..(len as NAB - split_size*(amt_splits-1))).collect();
-                let mut edgs: Vec<(NAB,NAB)> = vec![];
-                for j in 0..(len as NAB - split_size*cur_split) {
-                    for k in 0..j {
-                        let v1 = &arr[(j+split_size*cur_split) as usize];
-                        let v2 = &arr[(k+split_size*cur_split) as usize];
-                        let diff: Array1<f32> = (v1 - v2).iter().map(|coord| *coord/divisor_r).collect();
-                        let dist: f32 = f32::sqrt(diff.dot(&diff));
-                        if dist >= 1.0/100.0 {
-                            //write!(output, "{} {}\n", (k+1).to_string(), (j+1).to_string()).unwrap();
-                            edgs.push((j,k));
-                        }
+                verts = (0..(len as NAB - split_size*(amt_splits-1))).collect();
+                max_j = len as NAB - split_size*cur_split;
+            }
+            for j in 0..max_j {
+                for k in 0..j {
+                    if (&arr[(j+split_size*cur_split) as usize] - 
+                        &arr[(k+split_size*cur_split) as usize]).norm_l2() 
+                        >= divisor_r/100.0 
+                        {
+                        edgs.push((j,k));
                     }
                 }
-                let graph = PmcGraph::new(verts, edgs);
-                let now2 = std::time::Instant::now();
-                collected_verts.extend(graph.search_bounds().into_iter().map(|val| val+split_size*cur_split));
-                elapsed_time = now2.elapsed();
-                println!(
-                    "\tIt took {} milliseconds to compute the clique in chunk {}",
-                    elapsed_time.as_millis(), cur_split
-                );
             }
+            println!("\tChunk {}: We have #verts= {}, #edges={}, density={}.", cur_split,
+            verts.len(), edgs.len(), ((2*edgs.len()) as f32)/((verts.len() as f32)*(verts.len()-1) as f32));
+            let graph = PmcGraph::new(verts, edgs);
+            let now2 = std::time::Instant::now();
+            collected_verts.extend(graph.search_bounds().into_iter().map(|val| val+split_size*cur_split));
+            elapsed_time = now2.elapsed();
+            println!(
+                "\tIt took {} milliseconds to compute the clique in chunk {}",
+                elapsed_time.as_millis(), cur_split
+            );
         }
         elapsed_time = now.elapsed();
         println!(
@@ -318,12 +301,8 @@ fn main() {
         let mut col_edgs: Vec<(NAB,NAB)> = vec![];
         for j in 0..col_len {
             for k in 0..j {
-                let v1 = &arr[collected_verts[j] as usize];
-                let v2 = &arr[collected_verts[k] as usize];
-                let diff: Array1<f32> = (v1 - v2).iter().map(|coord| *coord/divisor_r).collect();
-                let dist: f32 = f32::sqrt(diff.dot(&diff));
-                if dist >= 1.0/100.0 {
-                    col_edgs.push((j as NAB, k as NAB));
+                if (&arr[collected_verts[j] as usize] - &arr[collected_verts[k] as usize]).norm_l2() >= divisor_r/100.0 {
+                    col_edgs.push((j as NAB,k as NAB));
                 }
             }
         }
@@ -351,47 +330,52 @@ fn main() {
             "\nIn total the entire process took {} seconds",
             elapsed_time.as_secs(),
         );
+        ()
     }
-    else {
-        println!("We are in non-chunking mode");
+    println!("We are in non-chunking mode");
 
-        let verts: Vec<NAB> = (0..(len as NAB)).collect();
-        let mut edgs: Vec<(NAB,NAB)> = vec![];
-    
-        // let path = "matrix10.txt";
-        // let mut output = File::create(path).unwrap();
+    let verts: Vec<NAB> = (0..(len as NAB)).collect();
+    let mut edgs: Vec<(NAB,NAB)> = vec![];
 
-        let now_glo = std::time::Instant::now();
-        let mut now = std::time::Instant::now();
-        for j in 0..len {
-            for k in 0..j {
-                let v1 = &arr[j];
-                let v2 = &arr[k];
-                let diff: Array1<f32> = (v1 - v2).iter().map(|coord| *coord/divisor_r).collect();
-                let dist: f32 = f32::sqrt(diff.dot(&diff));
-                if dist >= 1.0/100.0 {
-                    edgs.push((j as NAB,k as NAB));
-                }
+    let now_glo = std::time::Instant::now();
+    let mut now = std::time::Instant::now();
+
+    /*
+    The below is an equivalent way of calculating the edges written in a 
+    functional style. It is ~25% slower though, so we'll stick with imperative.
+    let edgs = (0..(len as NAB))
+        .flat_map(|j| zip(repeat(j), 0..j))
+        .filter(|(j,k)| 
+            (&arr[*j as usize] - &arr[*k as usize]).norm_l2() >= divisor_r/100.0)
+        .collect::<Vec<(NAB,NAB)>>();
+    */
+
+    for j in 0..len {
+        for k in 0..j {
+            if (&arr[j] - &arr[k]).norm_l2() >= divisor_r/100.0 {
+                edgs.push((j as NAB,k as NAB));
             }
-        }    
-        let graph: PmcGraph = PmcGraph::new(verts, edgs);
-        let mut elapsed_time = now.elapsed();
-        println!(
-            "Building the graph took {} milliseconds.",
-            elapsed_time.as_millis()
-        );
-        now = std::time::Instant::now();
-        let clique = graph.search_bounds();
-        println!("Clique of size {} is {:?}", clique.len(), clique);
-        elapsed_time = now.elapsed();
-        println!(
-            "Finding max clique took {} milliseconds.",
-            elapsed_time.as_millis()
-        );
-        elapsed_time = now_glo.elapsed();
-        println!(
-            "The total process took {} seconds.",
-            elapsed_time.as_secs()
-        );
+        }
     }
+    println!("We have #verts= {}, #edges={}, density={}.",
+    verts.len(), edgs.len(), ((2*edgs.len()) as f32)/((verts.len() as f32)*(verts.len()-1) as f32));
+    let graph: PmcGraph = PmcGraph::new(verts, edgs);
+    let mut elapsed_time = now.elapsed();
+    println!(
+        "Building the graph took {} milliseconds.",
+        elapsed_time.as_millis()
+    );
+    now = std::time::Instant::now();
+    let clique = graph.search_bounds();
+    println!("Clique of size {} is {:?}", clique.len(), clique);
+    elapsed_time = now.elapsed();
+    println!(
+        "Finding max clique took {} milliseconds.",
+        elapsed_time.as_millis()
+    );
+    elapsed_time = now_glo.elapsed();
+    println!(
+        "The total process took {} seconds.",
+        elapsed_time.as_secs()
+    );
 }
