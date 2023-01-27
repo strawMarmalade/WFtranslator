@@ -206,6 +206,19 @@ type NAB = u32;
 //     output
 // }
 
+// let range: distributions::Uniform<f32> = distributions::Uniform::from(0.0..1.0);
+// // let mut rng: rand::rngs::ThreadRng = rand::thread_rng();
+// const AMOUNT: usize = 5000;
+// let mut rng = ChaCha8Rng::seed_from_u64(42);
+// let mut now: std::time::Instant = std::time::Instant::now();
+// let x_vals: [Array1<f32>; AMOUNT] =
+//     [(); AMOUNT].map(|_| range.sample_iter(&mut rng).take(DIM).collect());
+// let mut elapsed_time = now.elapsed();
+// println!(
+//     "Generating random points took {} milliseconds.",
+//     elapsed_time.as_millis()
+// );
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -219,18 +232,7 @@ fn main() {
         let chunk_size = &args[3].parse::<usize>().unwrap();
         split_size = *chunk_size as NAB;
     }
-    // let range: distributions::Uniform<f32> = distributions::Uniform::from(0.0..1.0);
-    // // let mut rng: rand::rngs::ThreadRng = rand::thread_rng();
-    // const AMOUNT: usize = 5000;
-    // let mut rng = ChaCha8Rng::seed_from_u64(42);
-    // let mut now: std::time::Instant = std::time::Instant::now();
-    // let x_vals: [Array1<f32>; AMOUNT] =
-    //     [(); AMOUNT].map(|_| range.sample_iter(&mut rng).take(DIM).collect());
-    // let mut elapsed_time = now.elapsed();
-    // println!(
-    //     "Generating random points took {} milliseconds.",
-    //     elapsed_time.as_millis()
-    // );
+
     let mut now = std::time::Instant::now();
 
     let f = BufReader::new(File::open(file_path).unwrap());
