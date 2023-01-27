@@ -219,10 +219,9 @@ type NAB = u32;
 //     elapsed_time.as_millis()
 // );
 
-fn chunk_clique(split_size: u32, verts: &Vec<NAB>, arr: &Vec<Array1<f32>>, divisor_r: f32, increase_factor: u32) -> Vec<NAB> {
+fn chunk_clique(chunk_size: u32, verts: &Vec<NAB>, arr: &Vec<Array1<f32>>, divisor_r: f32, increase_factor: u32) -> Vec<NAB> {
     let mut collected_verts: Vec<NAB> = vec![];
-    let mut min_deg: NAB = 0;
-    let chunks = verts.chunks(split_size as usize);
+    let chunks = verts.chunks(chunk_size as usize);
 
     let chunk_amount = chunks.len();
 
@@ -247,7 +246,6 @@ fn chunk_clique(split_size: u32, verts: &Vec<NAB>, arr: &Vec<Array1<f32>>, divis
         );
 
         let graph = PmcGraph::new(chunk.to_vec(), edgs);
-        min_deg = graph.min_degree;
         let now2 = std::time::Instant::now();
         collected_verts.extend(
             graph
@@ -264,7 +262,7 @@ fn chunk_clique(split_size: u32, verts: &Vec<NAB>, arr: &Vec<Array1<f32>>, divis
     if chunk_amount == 1 {
         return collected_verts;
     }
-    chunk_clique(split_size*increase_factor, &collected_verts, arr, divisor_r, increase_factor)
+    chunk_clique(chunk_size*increase_factor, &collected_verts, arr, divisor_r, increase_factor)
 }
 
 fn read_file_to_mat(file_path: &String) -> Vec<Array1<f32>> {
@@ -296,7 +294,7 @@ fn main() {
 
     let divisor_r: f32 = 200.0;
 
-    let mut now = std::time::Instant::now();
+    let now = std::time::Instant::now();
     let arr = read_file_to_mat(file_path);
     let mut elapsed_time = now.elapsed();
     let len = arr.len();
@@ -318,45 +316,4 @@ fn main() {
 
     elapsed_time = now.elapsed();
     println!("The total process took {} seconds.", elapsed_time.as_secs());
-    
-    /*
-    The below is an equivalent way of calculating the edges written in a
-    functional style. It is ~25% slower though, so we'll stick with imperative.
-    I do think that this way uses less memory/less read-writes.
-    let edgs = (0..(len as NAB))
-        .flat_map(|j| zip(repeat(j), 0..j))
-        .filter(|(j,k)|
-            (&arr[*j as usize] - &arr[*k as usize]).norm_l2() >= divisor_r/100.0)
-        .collect::<Vec<(NAB,NAB)>>();
-    */
-
-    // for j in 0..len {
-    //     for k in 0..j {
-    //         if (&arr[j] - &arr[k]).norm_l2() >= divisor_r / 100.0 {
-    //             edgs.push((j as NAB, k as NAB));
-    //         }
-    //     }
-    // }
-    // println!(
-    //     "We have #verts= {}, #edges={}, density={}.",
-    //     verts.len(),
-    //     edgs.len(),
-    //     ((2 * edgs.len()) as f32) / ((verts.len() as f32) * (verts.len() - 1) as f32)
-    // );
-    // let graph: PmcGraph = PmcGraph::new(verts, edgs);
-    // let mut elapsed_time = now.elapsed();
-    // println!(
-    //     "Building the graph took {} milliseconds.",
-    //     elapsed_time.as_millis()
-    // );
-    // now = std::time::Instant::now();
-    // let clique = graph.search_bounds();
-    // println!("Clique of size {} is {:?}", clique.len(), clique);
-    // elapsed_time = now.elapsed();
-    // println!(
-    //     "Finding max clique took {} milliseconds.",
-    //     elapsed_time.as_millis()
-    // );
-    // elapsed_time = now_glo.elapsed();
-    // println!("The total process took {} seconds.", elapsed_time.as_secs());
 }

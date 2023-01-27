@@ -11,7 +11,7 @@ use std::sync::mpsc::{Receiver, Sender};
 
 /* this is the node amount bound. If we have more than 4_294_967_295 many nodes, change this to usize/u64 */
 type NAB = u32;
-type AdjMtx = HashMap<NAB, Vec<NAB>>;
+//type AdjMtx = HashMap<NAB, Vec<NAB>>;
 
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct PmcGraph {
@@ -52,14 +52,7 @@ impl PmcGraph {
             .into_iter()
             .zip(0..(vertlen as NAB))
             .map(|p| (p.0,(p.1, vec![])))
-            .collect::<HashMap<NAB,(NAB,Vec<NAB>)>>();
-
-        //let mut vert_list = (0..(verts.len() as NAB)).into_iter().map(|v| (v, vec![]))
-        //.collect::<HashMap<NAB, Vec<NAB>>>();
-
-        //This is basically the map that says which vertex corresponds to which index
-        //let vert_enum: Vec<(usize, u32)> = verts.into_iter().enumerate().collect();
-        
+            .collect::<HashMap<NAB,(NAB,Vec<NAB>)>>();        
 
         for e in edgs.into_iter() {
             let val1 = vert_enum.get(&e.1).unwrap().0;
@@ -72,56 +65,12 @@ impl PmcGraph {
 
             let val11 = vert_enum.get_mut(&e.1).unwrap();
             val11.1.push(val00);
-
-            // if let Some(lst) = vert_enum.get_mut(&e.0) {
-            //     lst.1.push(vert_enum.get(&e.1).unwrap().0);
-            // } else {
-            //     panic!("The node {} does not belong to this graph.", e.0);
-            // }
-            // if let Some(lst) = vert_enum.get_mut(&e.1) {
-            //     lst.1.push(vert_enum.get(&e.0).unwrap().0);
-            // } else {
-            //     panic!("The node {} does not belong to this graph.", e.0);
-            // }
         }
 
-        //vert_list.insert(current_start_vert, vec![]);
-        // for e in edgs {
-        //     if e.0 != current_start_vert {
-        //         /*as we hope the edges will be somewhat ordered we
-        //         we might save so time by first checking against that*/
-        //         /*now if the vertex is not already contained we add it to the hashmap */
-        //         if !vert_list.contains_key(&e.0) {
-        //             vert_list.insert(e.0, vec![]);
-        //         }
-        //         /*now update the current vector for the next round */
-        //         current_start_vert = e.0;
-        //     }
-        //     /*probably however the end node will be the one that keeps on changing so we'll just have to check every time whether or not its already in the hashmap or not */
-        //     if !vert_list.contains_key(&e.1) {
-        //         vert_list.insert(e.1, vec![]);
-        //     }
-        //     /*now we actually add the edge to the vertex list */
-        //     if let Some(lst) = vert_list.get_mut(&e.0) {
-        //         lst.push(e.1);
-        //         //self.max_degree = cmp::max(self.max_degree, lst.len());
-        //     } else {
-        //         panic!("The node {} does not belong to this graph.", e.0);
-        //     }
-        //     if let Some(lst) = vert_list.get_mut(&e.1) {
-        //         lst.push(e.0);
-        //         //self.max_degree = cmp::max(self.max_degree, lst.len());
-        //     } else {
-        //         panic!("The node {} does not belong to this graph.", e.1);
-        //     }
-        // }
         /* now we should have the graph in the hashmap and will convert it to the form we need it */
         vertices.push(edges.len());
         for ver in backup_verts {
-
-            let lst = &vert_enum.get(&ver).unwrap().1;
-
-            edges.extend(lst);
+            edges.extend(&vert_enum[&ver].1);
             vertices.push(edges.len());
         }
         let mut elapsed_time = now.elapsed();
