@@ -5,7 +5,7 @@
         "type": "lldb",
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/feffer",
-        "args": ["/home/leo/Documents/work/WFtranslator/Heu2.txt", "1", "2000"],
+        "args": ["/home/leo/Documents/work/WFtranslator/Heu2.txt", "1000"],
         "cwd": "${workspaceFolder}",
         "sourceLanguages": ["rust"],
         "preLaunchTask": "${defaultBuildTask}",
