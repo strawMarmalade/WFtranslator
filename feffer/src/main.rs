@@ -117,26 +117,6 @@ type NAB = u32;
 //   })
 // }
 
-// fn dot_product(a: &[f32], b: &[f32]) -> f32 {
-//     // Calculate the dot product of two vectors.
-//     assert_eq!(a.len(), b.len());
-//     let mut product: f32 = 0.0;
-//     for i in 0..a.len() {
-//         product += a[i] * b[i];
-//     }
-//     return product;
-// }
-
-// fn dist(x_point: &[f32], q_point: &[f32]) -> f32{
-//     let diff = x_point - q_point;
-//     let sum: f32 = dot_product(diff,diff);
-//     return sum.sqrt();
-// }
-
-// fn maxDotFunc(x_point: &Array1<f32>, q_point: &Array1<f32>) -> f32 {
-//     f32::abs(x_point.dot(q_point)/x_point.dot(x_point))
-// }
-
 // #[allow(dead_code)]
 // fn mu(x_point: &Array1<f32>, q_point: &Array1<f32>) -> f32 {
 //     let diff: Array1<f32> = x_point - q_point;

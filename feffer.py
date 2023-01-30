@@ -129,35 +129,35 @@ def exportMatOfDist(X):
                     f1.write(f"{i} {j}" + os.linesep)   
     print(count)
 
-def pmc(nnodes, nedges, startEdges, endEdges, cliqueArray):
-    #_libpmc = ctypes.CDLL("/home/leo/Documents/work/WFtranslator/pmcdev/build/out/libpmc.so")
-    _libpmc = ctypes.CDLL("/usr/local/lib/libpmc.so")
-    """
-       int res = max_clique(long long nedges, int *ei, int *ej,
-                int outsize, int *clique,
-                bool verbose=true,
-                int algorithm=0,
-                int threads=1,
-                bool graph_stats=false,
-                string heuristic_strategy="kcore",
-                double time_limit_secs=60*60,
-                double remove_time_secs = 4.0,
-                string edge_sorter = "",
-                string vertex_search_order = "deg",
-                bool decreasing_order=false
-                );
-    """
-    _libpmc.max_clique.argtypes = (ctypes.c_longlong, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.POINTER(ctypes.c_int), ctypes.c_bool, ctypes.c_int,ctypes.c_int, ctypes.c_bool,ctypes.POINTER(ctypes.c_char),ctypes.c_double, ctypes.c_double, ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_char), ctypes.c_bool)
-    edgesLen = ctypes.c_longlong(nedges)
-    array_type = ctypes.c_int*nedges
-    array_node_type = ctypes.c_int*nnodes
-    result =  _libpmc.max_clique(edgesLen, array_type(*startEdges), array_type(*endEdges), ctypes.c_int(nnodes), array_node_type(*cliqueArray), ctypes.c_bool(True), ctypes.c_int(0), ctypes.c_int(16), ctypes.c_bool(True), "deg".encode('utf-8'), ctypes.c_double(60*60), ctypes.c_double(4), "".encode('utf-8'), "deg".encode('utf-8'), ctypes.c_bool(False))
-    # _libpmc.print_max_clique.argtypes = (ctypes.c_longlong, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.POINTER(ctypes.c_int))
-    # edgesLen = ctypes.c_longlong(nedges)
-    # array_type = ctypes.c_int*nedges
-    # array_node_type = ctypes.c_int*nnodes
-    # result =  _libpmc.print_max_clique(edgesLen, array_type(*startEdges), array_type(*endEdges), ctypes.c_int(nnodes), array_node_type(*cliqueArray))
-    print(result)
+# def pmc(nnodes, nedges, startEdges, endEdges, cliqueArray):
+#     #_libpmc = ctypes.CDLL("/home/leo/Documents/work/WFtranslator/pmcdev/build/out/libpmc.so")
+#     _libpmc = ctypes.CDLL("/usr/local/lib/libpmc.so")
+#     """
+#        int res = max_clique(long long nedges, int *ei, int *ej,
+#                 int outsize, int *clique,
+#                 bool verbose=true,
+#                 int algorithm=0,
+#                 int threads=1,
+#                 bool graph_stats=false,
+#                 string heuristic_strategy="kcore",
+#                 double time_limit_secs=60*60,
+#                 double remove_time_secs = 4.0,
+#                 string edge_sorter = "",
+#                 string vertex_search_order = "deg",
+#                 bool decreasing_order=false
+#                 );
+#     """
+#     _libpmc.max_clique.argtypes = (ctypes.c_longlong, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.POINTER(ctypes.c_int), ctypes.c_bool, ctypes.c_int,ctypes.c_int, ctypes.c_bool,ctypes.POINTER(ctypes.c_char),ctypes.c_double, ctypes.c_double, ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_char), ctypes.c_bool)
+#     edgesLen = ctypes.c_longlong(nedges)
+#     array_type = ctypes.c_int*nedges
+#     array_node_type = ctypes.c_int*nnodes
+#     result =  _libpmc.max_clique(edgesLen, array_type(*startEdges), array_type(*endEdges), ctypes.c_int(nnodes), array_node_type(*cliqueArray), ctypes.c_bool(True), ctypes.c_int(0), ctypes.c_int(16), ctypes.c_bool(True), "deg".encode('utf-8'), ctypes.c_double(60*60), ctypes.c_double(4), "".encode('utf-8'), "deg".encode('utf-8'), ctypes.c_bool(False))
+#     # _libpmc.print_max_clique.argtypes = (ctypes.c_longlong, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.POINTER(ctypes.c_int))
+#     # edgesLen = ctypes.c_longlong(nedges)
+#     # array_type = ctypes.c_int*nedges
+#     # array_node_type = ctypes.c_int*nnodes
+#     # result =  _libpmc.print_max_clique(edgesLen, array_type(*startEdges), array_type(*endEdges), ctypes.c_int(nnodes), array_node_type(*cliqueArray))
+#     print(result)
 
     # count = 0
     # fromList = []
