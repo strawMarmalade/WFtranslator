@@ -1,16 +1,18 @@
-use ndarray::{self, Array1};
+use na::{Vector6, Matrix6};
+//use ndarray::{self, Array1, Array2};
+use nalgebra as na;
 // use rand::SeedableRng;
 // use rand::{self, distributions, prelude::Distribution};
 // use std::f32;
 // use std::fs::File;
-// use std::io::Write;
+use std::io::Write;
 //use rand_chacha::ChaCha8Rng;
 //use threadpool::ThreadPool;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 //use std::iter::{zip, repeat};
-use ndarray_linalg::norm::Norm;
+//use ndarray_linalg::norm::Norm;
 
 //use std::time;
 mod pmcgraph;
@@ -124,46 +126,67 @@ type NAB = u32;
 //     (1.0 / (dist - 1.0 / 3.0)).exp()
 //         / ((1.0 / (dist - 1.0 / 3.0)).exp() + (1.0 / (1.0 / 2.0 - dist)).exp())
 // }
-// #[allow(dead_code)]
-// fn calc_dist_from1(x0_point: &Array1<f32>, x_point: &Array1<f32>, y_vals: &[Array1<f32>]) -> f32 {
-//     if y_vals.len() != 0 {
-//         let max_y: f32 = y_vals
-//             .into_iter()
-//             .map(|y| f32::abs(x_point.dot(y) / x_point.dot(x_point)))
-//             .reduce(f32::max)
-//             .unwrap();
-//         max_y.max(f32::abs(
-//             1.0 - (x0_point - x_point).dot(&(x0_point - x_point)),
-//         ))
-//     } else {
-//         f32::abs(1.0 - (x0_point - x_point).dot(&(x0_point - x_point)))
-//     }
-// }
 
-// #[allow(dead_code)]
-// fn argmin(nets: &Vec<f32>) -> usize {
-//     *nets
-//         .iter()
-//         .enumerate()
-//         .min_by(|(_, a), (_, b)| a.total_cmp(b))
-//         .map(|(index, _)| index)
-//         .get_or_insert(0_usize)
-// }
+fn calc_dist_from1(x0_point: &Vector6<f32>, x_point: &Vector6<f32>, y_vals: &[Vector6<f32>]) -> f32 {
+    if y_vals.len() != 0 {
+        let max_y: f32 = y_vals
+            .into_iter()
+            .map(|y| f32::abs(x_point.dot(y) / x_point.dot(x_point)))
+            .reduce(f32::max)
+            .unwrap();
+        max_y.max(f32::abs(
+            1.0 - (x0_point - x_point).dot(&(x0_point - x_point)),
+        ))
+    } else {
+        f32::abs(1.0 - (x0_point - x_point).dot(&(x0_point - x_point)))
+    }
+}
 
-// #[allow(dead_code)]
-// fn find_disc2(x0_point: &Array1<f32>, x_vals: &[Array1<f32>], n: u32) -> Vec<Array1<f32>> {
-//     let mut output: Vec<Array1<f32>> = vec![];
-//     for _i in 0..n {
-//         output.append(&mut vec![x_vals[argmin(
-//             &mut x_vals
-//                 .into_iter()
-//                 .map(|x| calc_dist_from1(x0_point, x, &output))
-//                 .collect::<Vec<f32>>(),
-//         )]
-//         .clone()]);
-//     }
-//     output
-// }
+fn argmin(nets: &Vec<f32>) -> usize {
+    nets
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| a.total_cmp(b))
+        .map(|(index, _)| index)
+        .unwrap()
+}
+
+fn find_disc(x0_point: &Vector6<f32>, x_vals: &[Vector6<f32>], n: u32) -> Vec<Vector6<f32>> {
+    let mut output: Vec<Vector6<f32>> = vec![];
+    for _i in 0..n {
+        output.append(&mut vec![x_vals[argmin(
+            &mut x_vals
+                .into_iter()
+                .map(|x| calc_dist_from1(x0_point, x, &output))
+                .collect::<Vec<f32>>(),
+        )]
+        .clone()]);
+    }
+    output
+}
+
+fn unit_ball_around_x(x_point: &Vector6<f32>, points: &[Vector6<f32>]) -> Vec<Vector6<f32>> {
+    let mut output: Vec<Vector6<f32>> = vec![];
+    for x in points {
+        if (x_point-x).norm() <= 1.0 {
+            output.push(x.clone());
+        }
+    }
+    output
+}
+
+fn get_qs(max_clique: Vec<NAB>, points: &[Vector6<f32>]) -> (Vec<Vector6<f32>>, Vec<Matrix6<f32>>) {
+    let points_q = max_clique.iter().map(|p| points[*p as usize]);
+    let points_clone = points_q.clone();
+    let x_ones = points_q.clone().map(|q| unit_ball_around_x(&q, points));
+    let spaces_q = points_q.zip(x_ones).map(|(q,x)| na::Matrix6x4::from_columns(&find_disc(&q, &x, 4)));
+    let projs = spaces_q
+        .map(|mat| 
+            na::linalg::QR::new(mat).q())
+            .map(|q| q*q.transpose());
+    (points_clone.collect(), projs.collect())
+}
+
 
 // #[allow(dead_code)]
 // fn find_disc(x0_point: &Array1<f32>, x_vals: &[Array1<f32>], n: u32) -> Vec<Array1<f32>> {
@@ -199,7 +222,7 @@ type NAB = u32;
 //     elapsed_time.as_millis()
 // );
 
-fn chunk_clique(chunk_size: u32, verts: &Vec<NAB>, arr: &Vec<Array1<f32>>, divisor_r: f32, increase_factor: u32) -> Vec<NAB> {
+fn chunk_clique(chunk_size: u32, verts: &Vec<NAB>, arr: &Vec<Vector6<f32>>, divisor_r: f32, increase_factor: u32) -> Vec<NAB> {
     let mut collected_verts: Vec<NAB> = vec![];
     let chunks = verts.chunks(chunk_size as usize);
 
@@ -211,7 +234,7 @@ fn chunk_clique(chunk_size: u32, verts: &Vec<NAB>, arr: &Vec<Array1<f32>>, divis
         for j in 0..chunk_len {
             for k in 0..j {
                 if (&arr[chunk[j] as usize] - &arr[chunk[k] as usize])
-                    .norm_l2()
+                    .norm()    
                     >= divisor_r / 100.0
                 {
                     edgs.push((chunk[j] as NAB, chunk[k] as NAB));
@@ -245,16 +268,17 @@ fn chunk_clique(chunk_size: u32, verts: &Vec<NAB>, arr: &Vec<Array1<f32>>, divis
     chunk_clique(chunk_size*increase_factor, &collected_verts, arr, divisor_r, increase_factor)
 }
 
-fn read_file_to_mat(file_path: &String) -> Vec<Array1<f32>> {
+fn read_file_to_mat(file_path: &String) -> Vec<Vector6<f32>> {
     let f = BufReader::new(File::open(file_path).unwrap());
 
     f
         .lines()
         .map(|l| {
+            Vector6::from_iterator(
             l.unwrap()
                 .split_whitespace()
-                .map(|number| number.parse().unwrap())
-                .collect()
+                .map(|number| number.parse::<f32>().unwrap())
+            )
         })
         .collect()
 }
@@ -293,6 +317,17 @@ fn main() {
     let max_clique = chunk_clique(chunk_size, &(0..(len as NAB)).collect::<Vec<NAB>>(), &arr, divisor_r, 2);
 
     println!("Found max clique of len {}: {:?}", max_clique.len(), max_clique);
+
+    let now2 = std::time::Instant::now();
+    let vals = get_qs(max_clique, &arr);
+    let elapsed_time2 = now2.elapsed();
+    println!("It took {} micro seconds to calc {} qr decomps", elapsed_time2.as_micros(), vals.0.len());
+
+    let path = "QQTvals2.txt";
+    let mut output = File::create(path).unwrap();
+    for val in vals.1 {
+        writeln!(output, "{:?}", val).unwrap();
+    }
 
     elapsed_time = now.elapsed();
     println!("The total process took {} seconds.", elapsed_time.as_secs());
