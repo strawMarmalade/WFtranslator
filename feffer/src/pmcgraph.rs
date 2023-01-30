@@ -1,9 +1,8 @@
-//use std::cmp::Ordering;
+/*
+This code is based on https://github.com/ryanrossi/pmc and has just been 
+reimplemented in rust
+*/
 use std::collections::HashMap;
-//use std::sync::atomic::{AtomicBool, Ordering};
-// use std::thread;
-// use std::sync::{Arc, Barrier, Mutex};
-// use threadpool::ThreadPool;
 use parking_lot::RwLock;
 use rayon::prelude::*;
 use std::sync::mpsc::channel;

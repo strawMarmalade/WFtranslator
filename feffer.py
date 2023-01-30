@@ -1,4 +1,4 @@
-##%%
+#%%
 import numpy as np
 import scipy.linalg as la
 import time
@@ -250,71 +250,111 @@ def jaxGettingQs(max_clique, X, n):
     return points_q, Qs
 
 def jaxGettingF(points_q, Qs):
-    Ps = [lambda y: Qs[val]@Qs[val].T@y+points_q[val] for val in jnp.arange(len(points_q))]
+    Ps = [lambda y: Qs[val]@y+points_q[val] for val in jnp.arange(len(points_q))]
     mus = [lambda y: mu(y,q) for q in points_q]
     phis = [lambda y: mus[val](y)*Ps[val](y)+(1-mus[val](y))*y for val in jnp.arange(len(points_q))]
     body_fun = lambda i,x: lax.switch(i, phis, x)
     return lambda y: lax.fori_loop(0,len(phis),body_fun,y)
 
-tic = time.perf_counter()
-#points_q, Qs = jaxGettingQs(max_c,points, 4)
-# Using readline()
 points_q = [points[j] for j in max_c]
 
 file1 = open('feffer/QQTvals2.txt', 'r')
 Qs = []
 while True:  
-    # Get next line from file
     line = file1.readline()
-  
-    # if line is empty
-    # end of file is reached
     if not line:
         break
     Qs.append(np.reshape(np.array(np.matrix(line)), (6,6)))
 
-#Qs2 = np.reshape(np.fromfile("feffer/QQTvals2.txt"), (949,6,6))
-toc = time.perf_counter()
-print(f"it took {toc-tic:04f} seconds to do")
-print(Qs[0]@Qs[0].T)
 jax.device_put(points_q)
 jax.device_put(Qs)
 jax.device_put(points)
 print("Done with setup")
 func = jax.jit(jaxGettingF(points_q, Qs))
-grad = jax.jit(jax.grad(func))
+grad = jax.jit(jax.jacfwd(func))
 print("Done with func calculation")
-##%%
+
+#%%
+inp = points[11]/1.05
+
+jax.make_jaxpr(grad)(inp)
+#%%
 #jax.debug.print(grad(points[10]))
-x_small = points[10]
+tic = time.perf_counter()
+x_small = points[10]/1.05
 print(grad(x_small))
+toc = time.perf_counter()
+print(f"It took {toc -tic:08f} seconds to do this")
+#%%
+x_small2 = points[500]/1.05
+print(grad(x_small2))
+#%%
+delta = 0.01
+domainSets = [odl.set.domain.IntervalProd(x-delta,x+delta) for x in points]
+domain = odl.set.sets.SetUnion(domainSets)
+
+rangeSpace = odl.rn(1, dtype='float32')
+
+pointToFind = np.array([136,189,25])/200
+
+def funcCutOffSet(x):
+    y = (func(x)[:3]-pointToFind)
+    return y*y
+
+def gradCutOffSet(x):
+    return 2*(grad(func(x))@x)[:3](func(x)[:3]-pointToFind)
+
+class myOperator(odl.Operator):
+    """
+    The operator I want to minimize is 
+    || f(y)_(0,1) - x ||_2 
+    """
+    def __init__(self, dome, rang):
+        self.func = funcCutOffSet
+        self.is_linear = False
+        self.is_functional = True
+        self.gradient = gradCutOffSet
+        dom = dome
+        ran = rang
+        super(myOperator, self).__init__(dom, ran)
+    def _call(self, x, out):
+        out = self.func(x)
+    def _call(self, x):
+        return self.func(x)
+    @property
+    def gradient(self):
+        """The gradient operator."""
+
+        # First we store the functional in a variable
+        functional = self
+
+        # The class corresponding to the gradient operator.
+        class MyGradientOperator(odl.Operator):
+
+            """Class implementing the gradient operator."""
+
+            def __init__(self):
+                """Initialize a new instance."""
+                super(MyGradientOperator, self).__init__(
+                    domain=functional.domain, range=functional.domain)
+
+            def _call(self, x):
+                """Evaluate the gradient."""
+                # Here we can access the store functional from a few lines
+                # above
+                return functional.gradient(x)
+
+        return MyGradientOperator()
+
+Op = myOperator(domain, rangeSpace)
 
 
-# delta = 0.01
-# domainSets = [odl.set.domain.IntervalProd(x-delta,x+delta) for x in points]
-# domain = odl.set.sets.SetUnion(domainSets)
+opToMin = odl.solvers.functional.default_functionals.L2Norm.
 
-# rangeSpace = odl.rn(6, dtype='float32')
 
-# class myOperator(odl.Operator):
-#     def __init__(self, func, grad):
-#         self.func = func
-#         self.is_linear = False
-#         self.is_functional = True
-#         self.derivative = grad
-#         dom = domain
-#         ran = rangeSpace
-#         super(myOperator, self).__init__(dom, ran)
-#     def _call(self, x, out):
-#         out = self.func(x)
-#     def _call(self, x):
-#         return self.func(x)
-#     @property
-#     def derivative(self, point):
-#         return super().derivative(point)
-
-# Op = myOperator(func, grad)
-
+#statrting point 
+x = points[50]
+odl.solvers.steepest_descent()
 
 # def gettingF(max_clique, X, n):
 #     points_q = [X[j] for j in max_clique]
