@@ -6,7 +6,7 @@ import time
 from matplotlib.patches import Ellipse
 import math
 import torch
-import feffer
+#import feffer
 
 """
 For a given gridSize (default 200),
@@ -641,12 +641,13 @@ def generateWFData(amount = 100, N=201):
         WFData.extend(arr)
     return np.array(WFData)
 
-np.random.seed(43)
+seed = 70
+np.random.seed(seed)
 
-amount = 19
+amount = 100
 
 data = generateWFData(amount=amount)
-np.savetxt(f"Heu{amount}.txt", data, delimiter=' ', newline='\n', fmt='%d')
+np.savetxt(f"Heu{amount}_{seed}.txt", data, delimiter=' ', newline='\n', fmt='%d')
 # edgs = []
 
 

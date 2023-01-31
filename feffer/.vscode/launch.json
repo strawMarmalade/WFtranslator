@@ -1,11 +1,11 @@
 {
     "configurations": [
     {
-        "name": "Debug with LLDB",
+        "name": "Debug with LLDB mine",
         "type": "lldb",
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/feffer",
-        "args": ["/home/leo/Documents/work/WFtranslator/Heu2.txt", "1000"],
+        "args": ["/home/leo/Documents/work/WFtranslator/Heu2.txt"],
         "cwd": "${workspaceFolder}",
         "sourceLanguages": ["rust"],
         "preLaunchTask": "${defaultBuildTask}",

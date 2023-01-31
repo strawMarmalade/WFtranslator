@@ -5,7 +5,7 @@ use nalgebra as na;
 // use rand::{self, distributions, prelude::Distribution};
 // use std::f32;
 // use std::fs::File;
-use std::io::Write;
+//use std::io::Write;
 //use rand_chacha::ChaCha8Rng;
 //use threadpool::ThreadPool;
 use std::env;
@@ -24,121 +24,28 @@ mod pmcgraph;
 use crate::pmcgraph::PmcGraph;
 
 type NAB = u32;
+const DELTA: f32 = 0.7; //want C_{18}n\delta < C_{18}n 1/(n*20) = 6/20 
 
-// /// Solves the maximum clique problem by using a branch and bound.
-// pub fn solve_branch_and_bound(graph: &Graph) -> Graph {
-//     branch_and_bound(&graph, &graph.nodes_ord_by_degree(), Graph::default())
-// }
 
-// /// Solves the maximum clique problem by using a backtracking.
-// pub fn solve_backtracking(graph: &Graph) -> Graph {
-//     backtracking(&graph, &graph.nodes(), Graph::default())
-// }
-
-// fn branch_and_bound(graph: &Graph, nodes: &[usize], mut clique: Graph) -> Graph {
-//     // Clone current solution
-//     let mut subgraph = clique.clone();
-//     // Visit all nodes
-//     for (i, &n) in nodes.iter().enumerate() {
-//         // Prune branch if the current `k`-clique subgraph cannot increase
-//         if clique.degree() >= graph.degree_of(n) {
-//             break;
-//         }
-//         // Add node
-//         subgraph.insert_node(n);
-//         // Add edges
-//         for c in subgraph.nodes() {
-//             if graph.adjlst_of(n).contains(&c) {
-//                 subgraph.insert_edge((c, n));
-//             }
-//         }
-//         // Create a search branch and get the branch best solution
-//         let sol = branch_and_bound(graph, &nodes[i + 1..], subgraph.clone());
-//         // Check if the branch best solution is better than the current one
-//         if (sol.is_complete() && clique.is_empty())
-//             || (sol.is_complete() && sol.degree() > clique.degree())
-//         {
-//             clique = sol;
-//         }
-//         // Remove added node
-//         subgraph.remove_node(n);
-//     }
-//     clique
-// }
-
-// fn backtracking(graph: &Graph, nodes: &[usize], mut clique: Graph) -> Graph {
-//     // Clone current solution
-//     let mut subgraph = clique.clone();
-//     // Visit all nodes
-//     for (i, n) in nodes.iter().enumerate() {
-//         // Add node
-//         subgraph.insert_node(*n);
-//         // Add edges
-//         for c in subgraph.nodes() {
-//             if graph.adjlst_of(*n).contains(&c) {
-//                 subgraph.insert_edge((c, *n));
-//             }
-//         }
-//         // Create a backtracking branch and get the branch best solution
-//         let sol = backtracking(graph, &nodes[i + 1..], subgraph.clone());
-//         // Check if the branch best solution is better than the current one
-//         if (sol.is_complete() && clique.is_empty())
-//             || (sol.is_complete() && sol.degree() >= clique.degree())
-//         {
-//             clique = sol;
-//         }
-//         // Remove added node
-//         subgraph.remove_node(*n);
-//     }
-//     clique
-// }
-
-// /// Redirects the graph to the selected solver, run it and return a maximum
-// /// clique subgraph.
-// pub fn solve(graph: &Graph, solver: &Solver) -> Result<Graph, &'static str> {
-//   // Check if the graph is empty
-//   if graph.is_empty() { return Err("the graph is empty") }
-//   // If the graph has only one node return the graph
-//   if graph.nlen() == 1 { return Ok(graph.clone()) }
-//   // If the graph has two nodes and only one edge return the graph
-//   if graph.nlen() == 2 && graph.elen() == 1 { return Ok(graph.clone()) }
-//   // If the graph degree is two return a adjacent pair of nodes
-//   if graph.degree() == 2 && graph.elen() <= 2 {
-//     let mut solution = Graph::default();
-//     let n1 = graph.nodes()[0];
-//     let n2 = graph.adjlst_of(n1)[0];
-//     solution.insert_node(n1);
-//     solution.insert_node(n2);
-//     solution.insert_edge((n1, n2));
-//     return Ok(solution)
-//   }
-//   // Run solver and return solution
-//   Ok(match solver {
-//     Solver::Backtracking => backtracking::solve(&graph),
-//     Solver::BranchAndBound => branch_and_bound::solve(&graph),
-//   })
-// }
-
-// #[allow(dead_code)]
-// fn mu(x_point: &Array1<f32>, q_point: &Array1<f32>) -> f32 {
-//     let diff: Array1<f32> = x_point - q_point;
-//     let dist: f32 = diff.dot(&diff);
-//     (1.0 / (dist - 1.0 / 3.0)).exp()
-//         / ((1.0 / (dist - 1.0 / 3.0)).exp() + (1.0 / (1.0 / 2.0 - dist)).exp())
-// }
+fn mu(x_point: &Vector6<f32>, q_point: &Vector6<f32>) -> f32 {
+    let dist: f32 = (x_point - q_point).norm();
+    (1.0 / (dist - 1.0 / 3.0)).exp()
+        / ((1.0 / (dist - 1.0 / 3.0)).exp() + (1.0 / (1.0 / 2.0 - dist)).exp())
+}
 
 fn calc_dist_from1(x0_point: &Vector6<f32>, x_point: &Vector6<f32>, y_vals: &[Vector6<f32>]) -> f32 {
     if y_vals.len() != 0 {
-        let max_y: f32 = y_vals
+        y_vals
             .into_iter()
-            .map(|y| f32::abs(x_point.dot(y) / x_point.dot(x_point)))
+            .map(|y| f32::abs(x_point.dot(y) / x_point.norm()))
             .reduce(f32::max)
-            .unwrap();
-        max_y.max(f32::abs(
-            1.0 - (x0_point - x_point).dot(&(x0_point - x_point)),
-        ))
+            .unwrap()
+            .max(
+                f32::abs(
+            1.0 - (x0_point - x_point).norm(),
+            ))
     } else {
-        f32::abs(1.0 - (x0_point - x_point).dot(&(x0_point - x_point)))
+        f32::abs(1.0 - (x0_point - x_point).norm())
     }
 }
 
@@ -151,35 +58,140 @@ fn argmin(nets: &Vec<f32>) -> usize {
         .unwrap()
 }
 
-fn find_disc(x0_point: &Vector6<f32>, x_vals: &[Vector6<f32>], n: u32) -> Vec<Vector6<f32>> {
-    let mut output: Vec<Vector6<f32>> = vec![];
-    for _i in 0..n {
-        output.append(&mut vec![x_vals[argmin(
-            &mut x_vals
-                .into_iter()
-                .map(|x| calc_dist_from1(x0_point, x, &output))
-                .collect::<Vec<f32>>(),
-        )]
-        .clone()]);
-    }
-    output
-}
-
-fn unit_ball_around_x(x_point: &Vector6<f32>, points: &[Vector6<f32>]) -> Vec<Vector6<f32>> {
-    let mut output: Vec<Vector6<f32>> = vec![];
-    for x in points {
-        if (x_point-x).norm() <= 1.0 {
-            output.push(x.clone());
+fn find_disc(x0_point: &Vector6<f32>, x_vals: &Vec<Vector6<f32>>, n: usize) -> Option<Vec<Vector6<f32>>> {
+    match x_vals.len() {
+        4 => return Some(x_vals.clone()),
+        0..=3 => {
+            //println!("Error, this ball has too few points in it");
+            return None    
+        }
+        _ =>    {
+            let mut output: Vec<Vector6<f32>> = vec![];
+            let mut x_vals_copy = x_vals.clone();
+            for _ in 0..n {
+                let min_index = argmin(
+                    &x_vals_copy
+                        .iter()
+                        .map(|x| calc_dist_from1(x0_point, &x, &output))
+                        .collect::<Vec<f32>>()
+                );
+                output.push(x_vals_copy[min_index]);
+                x_vals_copy.remove(min_index);
+            }
+            Some(output)
         }
     }
-    output
 }
 
-fn get_qs(max_clique: Vec<NAB>, points: &[Vector6<f32>]) -> (Vec<Vector6<f32>>, Vec<Matrix6<f32>>) {
+// fn unit_ball_around_x(x_point: &Vector6<f32>, points: &Vec<Vector6<f32>>) -> Vec<Vector6<f32>> {
+//     //let points_clone = ;
+//     // let mut output: Vec<Vector6<f32>> = vec![];
+//     // for x in points {
+//     //     if (x_point-x).norm() <= 1.0 {
+//     //         output.push(x.clone());
+//     //     }
+//     // }
+//     // output
+//     points.clone().into_iter().filter(|x| (x_point-*x).norm() <= 1.0).collect()
+// }
+
+
+fn ball_rad_r(x_point: &Vector6<f32>, points: &Vec<Vector6<f32>>, r: f32) -> Vec<Vector6<f32>> {
+    points.clone()
+    .into_iter()
+    .filter(|x| 0.0 < (x_point-*x).norm() && (x_point-*x).norm() <= r)
+    .collect()
+    // let mut output: Vec<Vector6<f32>> = vec![];
+    // for p in points {
+    //     if 0.0 < (x_point-p).norm() && 
+    //         (x_point-p).norm() <= r {
+    //             output.push(p.clone());
+    //     }
+    // }
+    // output
+}
+
+fn points_dist(points_a: &Vec<Vector6<f32>>, points_b: &Vec<Vector6<f32>>) -> f32 {
+    /*
+    This goes thru every point in pointsA and checks if each point in b is var close to it
+    */
+    // !pointsA.iter().map(|a| pointsB.iter().map(|b| (a-b).norm() < var).any(|x| x == false)).any(|x| x == false)
+    let mut max: f32 = 0.0;
+    for a in points_a {
+        let mut min = (a-points_b[0]).norm();
+        for b in points_b {
+            min = min.min((a-b).norm());
+        }
+        max = max.max(min);
+    }
+    max
+}
+
+fn find_r(arr: &Vec<Vector6<f32>>) -> Option<f32>{
+    let mut r: f32 = 1.0;
+    let mut r_abs_min: f32 = 0.0;
+    let mut r_abs_max: f32 = 200.0;
+    //let mut our_arr = arr.clone();
+    //our_arr = our_arr.iter().map(|x| x*r).collect();
+
+    for _ in 0..15 {
+        println!("{}", r);
+        let r_balls = arr.iter().map(|point| (point, ball_rad_r(point, &arr, r)));
+        for ball in r_balls {
+            let disc = find_disc(ball.0, &ball.1, 4);
+            match disc {
+                Some(x) => {
+                    let mut aff = x.clone();
+                    aff.push(*ball.0);
+                    if points_dist(&ball.1,&aff) >= DELTA*r {
+                        println!("Distance {} was > {}, have to increase r, ball size is {}, point is {}", points_dist(&ball.1,&aff), DELTA, ball.1.len(), ball.0);
+                        //r_abs_min = r_abs_min.max(r);
+                        r_abs_max = r_abs_max.min(r);
+                        break;
+                    }
+                    //discs.push(x);
+                },
+                _ => { 
+                    //r_abs_max = r_abs_max.min(r);
+                    r_abs_min = r_abs_min.max(r);
+                    println!("Found point {} a too small one:{}, have to decrease r", ball.0, ball.1.len());
+                    break;
+                }
+            }
+        }
+        //arr = arr.iter().map(|x| x*(r_abs_max + r_abs_min)/2.0/r).collect();
+        if r == (r_abs_max + r_abs_min)/2.0 {
+            return Some(r);
+        }
+        r = (r_abs_max + r_abs_min)/2.0;
+    }
+    let r_balls = arr.iter().map(|point| (point, ball_rad_r(point, &arr, r)));
+    for ball in r_balls {
+        let disc = find_disc(ball.0, &ball.1, 4);
+        match disc {
+            Some(x) => { 
+                if points_dist(&ball.1,&x) >= DELTA*r {
+                    println!("You have to increase DELTA for this to work.");
+                    r_abs_max = r_abs_max.min(r);
+                    return None;
+                }
+                //discs.push(x);
+            },
+            _ => { 
+                r_abs_min = r_abs_min.max(r);
+                //println!("Found a too small one:{}, have to increase r", ball.1.len());
+                return None;
+            }
+        }
+    }
+    Some(r)
+}
+
+fn get_qs(max_clique: Vec<NAB>, points: &Vec<Vector6<f32>>) -> (Vec<Vector6<f32>>, Vec<Matrix6<f32>>) {
     let points_q = max_clique.iter().map(|p| points[*p as usize]);
     let points_clone = points_q.clone();
-    let x_ones = points_q.clone().map(|q| unit_ball_around_x(&q, points));
-    let spaces_q = points_q.zip(x_ones).map(|(q,x)| na::Matrix6x4::from_columns(&find_disc(&q, &x, 4)));
+    let x_ones = points_q.clone().map(|q| ball_rad_r(&q, points,  40.0));
+    let spaces_q = points_q.zip(x_ones).map(|(q,x)| na::Matrix6x4::from_columns(&find_disc(&q, &x, 4).unwrap()));
     let projs = spaces_q
         .map(|mat| 
             na::linalg::QR::new(mat).q())
@@ -208,19 +220,6 @@ fn get_qs(max_clique: Vec<NAB>, points: &[Vector6<f32>]) -> (Vec<Vector6<f32>>, 
 //     }
 //     output
 // }
-
-// let range: distributions::Uniform<f32> = distributions::Uniform::from(0.0..1.0);
-// // let mut rng: rand::rngs::ThreadRng = rand::thread_rng();
-// const AMOUNT: usize = 5000;
-// let mut rng = ChaCha8Rng::seed_from_u64(42);
-// let mut now: std::time::Instant = std::time::Instant::now();
-// let x_vals: [Array1<f32>; AMOUNT] =
-//     [(); AMOUNT].map(|_| range.sample_iter(&mut rng).take(DIM).collect());
-// let mut elapsed_time = now.elapsed();
-// println!(
-//     "Generating random points took {} milliseconds.",
-//     elapsed_time.as_millis()
-// );
 
 fn chunk_clique(chunk_size: u32, verts: &Vec<NAB>, arr: &Vec<Vector6<f32>>, divisor_r: f32, increase_factor: u32) -> Vec<NAB> {
     let mut collected_verts: Vec<NAB> = vec![];
@@ -283,6 +282,31 @@ fn read_file_to_mat(file_path: &String) -> Vec<Vector6<f32>> {
         .collect()
 }
 
+fn define_f<'a>(arr_at_clique: &'a Vec<Vector6<f32>>, mats: &'a Vec<Matrix6<f32>>) 
+    -> impl Fn(Vector6<f32>) -> Vector6<f32> + 'a {
+    /*
+    The code below is the rust equivalent of this python code:
+    def gettingF(points_q, Qs):
+        Ps = [lambda y: Qs[val]@y+points_q[val] for val in range(len(points_q))]
+        mus = [lambda y: mu(y,q) for q in points_q]
+        phis = [lambda y: mus[val](y)*Ps[val](y)+(1-mus[val](y))*y for val in range(len(points_q))]
+        return lambda y: fFromPhis(y, phis=phis)
+ 
+    def fFromPhis(y0, phis):
+        y = y0
+        for phi in phis:
+            y = phi(y)
+        return y
+    */
+    let projs = 
+            arr_at_clique.into_iter()
+            .zip(mats)
+            .map(|(arr,mat)| 
+                {move |y: Vector6<f32>| (mat*y + arr,mu(&y, arr))});
+    let phis = projs.map(|func| {move |y: Vector6<f32>| func(y).1*func(y).0 + (1.0-func(y).1)*y});
+    move |y: Vector6<f32>| phis.clone().fold(y, move|acc, phi| phi(acc))
+}
+
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -296,39 +320,45 @@ fn main() {
 
     let file_path = &args[1];
 
-    let divisor_r: f32 = 200.0;
+    let divisor_r: f32 = 4000.0;
 
     let now = std::time::Instant::now();
     let arr = read_file_to_mat(file_path);
-    let mut elapsed_time = now.elapsed();
-    let len = arr.len();
-    println!(
-        "Reading the file of points took {} milliseconds and we have {} many points",
-        elapsed_time.as_millis(),
-        len
-    );
-    if chunk_size > 0 {
-        println!("We are in chunking mode with chunk size {}", chunk_size);
-    }
-    else {
-        println!("We are in non-chunking mode");
-        chunk_size = len as NAB + 1;
-    }
-    let max_clique = chunk_clique(chunk_size, &(0..(len as NAB)).collect::<Vec<NAB>>(), &arr, divisor_r, 2);
+    find_r(&arr);
 
-    println!("Found max clique of len {}: {:?}", max_clique.len(), max_clique);
+    // let mut elapsed_time = now.elapsed();
+    // let len = arr.len();
+    // println!(
+    //     "Reading the file of points took {} milliseconds and we have {} many points",
+    //     elapsed_time.as_millis(),
+    //     len
+    // );
+    // if chunk_size > 0 {
+    //     println!("We are in chunking mode with chunk size {}", chunk_size);
+    // }
+    // else {
+    //     println!("We are in non-chunking mode");
+    //     chunk_size = len as NAB + 1;
+    // }
+    // let max_clique = chunk_clique(chunk_size, &(0..(len as NAB)).collect::<Vec<NAB>>(), &arr, divisor_r, 2);
 
-    let now2 = std::time::Instant::now();
-    let vals = get_qs(max_clique, &arr);
-    let elapsed_time2 = now2.elapsed();
-    println!("It took {} micro seconds to calc {} qr decomps", elapsed_time2.as_micros(), vals.0.len());
+    // println!("Found max clique of len {}: {:?}", max_clique.len(), max_clique);
 
-    let path = "QQTvals2.txt";
-    let mut output = File::create(path).unwrap();
-    for val in vals.1 {
-        writeln!(output, "{:?}", val).unwrap();
-    }
+    // let now2 = std::time::Instant::now();
+    // let vals = get_qs(max_clique, &arr);
+    // let elapsed_time2 = now2.elapsed();
+    // println!("It took {} micro seconds to calc {} qr decomps", elapsed_time2.as_micros(), vals.0.len());
 
-    elapsed_time = now.elapsed();
-    println!("The total process took {} seconds.", elapsed_time.as_secs());
+    // let func = define_f(&vals.0, &vals.1);
+    // let start: Vector6<f32> = Vector6::from_vec(vec![0.04,1.0,32.0,1.0,0.0,0.345]);
+    // println!("{}", func(start));
+
+    // // let path = "QQTvals2.txt";
+    // // let mut output = File::create(path).unwrap();
+    // // for val in vals.1 {
+    // //     writeln!(output, "{:?}", val).unwrap();
+    // // }
+
+    // elapsed_time = now.elapsed();
+    // println!("The total process took {} seconds.", elapsed_time.as_secs());
 }
