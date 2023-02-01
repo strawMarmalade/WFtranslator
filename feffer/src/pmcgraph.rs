@@ -2,7 +2,7 @@
 This code is based on https://github.com/ryanrossi/pmc and has just been 
 reimplemented in rust
 */
-use std::collections::HashMap;
+use std::collections::{HashMap};
 use parking_lot::RwLock;
 use rayon::prelude::*;
 use std::sync::mpsc::channel;
@@ -38,8 +38,8 @@ pub struct PmcGraph {
 
 impl PmcGraph {
     pub fn new(verts: Vec<NAB>, edgs: Vec<(NAB, NAB)>) -> PmcGraph {
-        let mut vertices: Vec<usize> = vec![];
-        let mut edges: Vec<NAB> = vec![];
+        let mut vertices: Vec<usize> = Vec::with_capacity(verts.len()+1);
+        let mut edges: Vec<NAB> = Vec::with_capacity(edgs.len()*2);
         //let mut vert_list: AdjMtx = AdjMtx::new();
         //let mut current_start_vert: NAB = edgs[0].0;
         let mut now: std::time::Instant = std::time::Instant::now();
@@ -294,7 +294,7 @@ impl PmcGraph {
             let verts = &self.vertices;
             let edgs = &self.edges;
             let kcores = &self.kcore;
-            let mut ind: Vec<bool> = vec![false; verts.len() - 1];
+            
 
             // for j in verts[u as usize]..verts[u as usize +1] {
             //     ind[edgs[j as usize] as usize] = true;
@@ -323,6 +323,8 @@ impl PmcGraph {
                 .collect();
             */
 
+
+            let mut ind: Vec<bool> = vec![false; verts.len() - 1];
             for j in verts[u as usize]..verts[u as usize + 1] {
                 ind[edgs[j] as usize] = true;
             }

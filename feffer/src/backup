@@ -1,0 +1,101 @@
+ // struct FuncToMin {
+    //     around_point: Vector4<FLO>,
+    //     fun: Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO>>,
+    // }
+    
+    // impl CostFunction for FuncToMin {
+    //     /// Type of the parameter vector
+    //     type Param = Vector4<FLO>;
+    //     /// Type of the return value computed by the cost function
+    //     type Output = FLO;
+    //     /// Apply the cost function to a parameter `p`
+    //     fn cost(&self, p: &Self::Param) -> Result<Self::Output, Error> {
+    //         //Outside of the ball of radius one around this point I wanna make the cost super high
+    //         if (p-self.around_point).norm() > DELTA {
+    //             return Ok(((self.fun)(*p)[2]-self.around_point[2]).powi(2)+((self.fun)(*p)[3]-self.around_point[3]).powi(2)*1000.0+1000.0);
+    //         }
+    //         // Evaluate 2D Rosenbrock function
+    //         Ok(((self.fun)(*p)[2]-self.around_point[2]).powi(2)+((self.fun)(*p)[3]-self.around_point[3]).powi(2))
+    //     }
+    // }
+
+    // impl Gradient for FuncToMin {
+    //     /// Type of the parameter vector
+    //     type Param = Vector4<FLO>;
+    //     /// Type of the gradient
+    //     type Gradient = Vector4<FLO>;
+    
+    //     /// Compute the gradient at parameter `p`.
+    //     fn gradient(&self, p: &Self::Param) -> Result<Self::Gradient, Error> {
+    //         // Compute gradient of 2D Rosenbrock function
+    //         let val1 = (self.fun)(*p + Vector4::from_vec(vec![10e-7,0.0,0.0,0.0]));
+    //         let val2 = (self.fun)(*p - Vector4::from_vec(vec![10e-7,0.0,0.0,0.0]));
+    //         let val3 = (self.fun)(*p + Vector4::from_vec(vec![0.0,10e-7,0.0,0.0]));
+    //         let val4 = (self.fun)(*p - Vector4::from_vec(vec![0.0,10e-7,0.0,0.0]));
+    //         let val5 = (self.fun)(*p + Vector4::from_vec(vec![0.0,0.0,10e-7,0.0]));
+    //         let val6 = (self.fun)(*p - Vector4::from_vec(vec![0.0,0.0,10e-7,0.0]));
+    //         let val7 = (self.fun)(*p + Vector4::from_vec(vec![0.0,0.0,0.0,10e-7]));
+    //         let val8 = (self.fun)(*p - Vector4::from_vec(vec![0.0,0.0,0.0,10e-7]));
+    //         Ok(Vector4::from_vec(vec![2.0/10e-7*(
+    //             (val1[2]-self.around_point[2]).powi(2)
+    //             +(val1[3]-self.around_point[3]).powi(2)
+    //             -(val2[2]-self.around_point[2]).powi(2)
+    //             -(val2[3]-self.around_point[3]).powi(2)),
+    //             2.0/10e-7*(
+    //             (val3[2]-self.around_point[2]).powi(2)
+    //             +(val3[3]-self.around_point[3]).powi(2)
+    //             -(val4[2]-self.around_point[2]).powi(2)
+    //             -(val4[3]-self.around_point[3]).powi(2)),
+    //             2.0/10e-7*(
+    //             (val5[2]-self.around_point[2]).powi(2)
+    //             +(val5[3]-self.around_point[3]).powi(2)
+    //             -(val6[2]-self.around_point[2]).powi(2)
+    //             -(val6[3]-self.around_point[3]).powi(2)),
+    //             2.0/10e-7*(
+    //             (val7[2]-self.around_point[2]).powi(2)
+    //             +(val7[3]-self.around_point[3]).powi(2)
+    //             -(val8[2]-self.around_point[2]).powi(2)
+    //             -(val8[3]-self.around_point[3]).powi(2))]))
+    //     }
+    // }
+
+    // let cost = FuncToMin {around_point:start, fun: Box::new(func)};
+    // let linesearch: MoreThuenteLineSearch<Vector4<FLO>, Vector4<FLO>, FLO> = MoreThuenteLineSearch::new();
+    // let solver = SteepestDescent::new(linesearch);
+
+    // let res = Executor::new(cost, solver)
+    // // Via `configure`, one has access to the internally used state.
+    // // This state can be initialized, for instance by providing an
+    // // initial parameter vector.
+    // // The maximum number of iterations is also set via this method.
+    // // In this particular case, the state exposed is of type `IterState`.
+    // // The documentation of `IterState` shows how this struct can be
+    // // manipulated.
+    // // Population based solvers use `PopulationState` instead of 
+    // // `IterState`.
+    // .configure(|state|
+    //     state
+    //         // Set initial parameters (depending on the solver,
+    //         // this may be required)
+    //         .param(start)
+    //         // Set maximum iterations to 10
+    //         // (optional, set to `std::u64::MAX` if not provided)
+    //         .max_iters(10)
+    //         // Set target cost. The solver stops when this cost
+    //         // function value is reached (optional)
+    //         //.target_cost(0.0)
+    // )
+    // // run the solver on the defined problem
+    // .run().expect("Thing");
+    // println!("{}", res);
+    // // Best parameter vector
+    // let best = res.state().get_best_param().unwrap();
+
+    // // Cost function value associated with best parameter vector
+    // let best_cost = res.state().get_best_cost();
+    // println!("best param {}, best cost {}", best, best_cost);
+    // let path = "QQTvals2.txt";
+    // let mut output = File::create(path).unwrap();
+    // for val in vals.1 {
+    //     writeln!(output, "{:?}", val).unwrap();
+    // }
