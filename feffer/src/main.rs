@@ -1,9 +1,12 @@
-use argmin::core::{CostFunction, Error, Gradient, Executor, State};
+use argmin::core::{CostFunction, Error, Gradient, Executor, State, Hessian};
 use argmin::solver::gradientdescent::SteepestDescent;
 use argmin::solver::linesearch::MoreThuenteLineSearch;
+use argmin::solver::trustregion::TrustRegion;
 use na::{Vector6, Vector4, Matrix4x3, Matrix4};
+use finitediff::FiniteDiff;
 //use ndarray::{self, Array1, Array2};
 use nalgebra as na;
+use ndarray::{Array1, array};
 // use rand::SeedableRng;
 // use rand::{self, distributions, prelude::Distribution};
 // use std::f32;
@@ -12,7 +15,8 @@ use nalgebra as na;
 //use rand_chacha::ChaCha8Rng;
 //use threadpool::ThreadPool;
 use std::env;
-use std::f32::consts::PI;
+use std::f64::consts::PI;
+
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 //use std::iter::{zip, repeat};
@@ -28,8 +32,8 @@ mod pmcgraph;
 use crate::pmcgraph::PmcGraph;
 
 type NAB = u32;
-type FLO = f32;
-const DELTA: FLO = 0.016; //want C_{18}n\delta < C_{18}n 1/(n*20) = 6/20 
+type FLO = f64;
+const DELTA: FLO = 200.0*0.016; //want C_{18}n\delta < C_{18}n 1/(n*20) = 6/20 
 //const DIV: FLO = 1.0;//1.0;
 
 fn mu(x_point: &Vector4<FLO>, q_point: &Vector4<FLO>) -> FLO {
@@ -350,7 +354,7 @@ fn main() {
         3 => chunk_size = args[2].parse::<usize>().unwrap() as NAB,
         _ => {
             chunk_size = args[2].parse::<usize>().unwrap() as NAB; 
-            divisor_r = args[3].parse::<f32>().unwrap();
+            divisor_r = args[3].parse::<FLO>().unwrap();
             }
     }
     println!("We are choosing r to be {}", divisor_r);
@@ -383,10 +387,11 @@ fn main() {
     let vals = get_qs(max_clique.clone(), &arr);
     let elapsed_time2 = now2.elapsed();
     println!("It took {} micro seconds to calc {} qr decomps", elapsed_time2.as_micros(), vals.0.len());
-    let start = coords(&vals.0[0].clone());
+    let start = coords(&vals.0[4].clone());
+    let point_to_find = coords(&vals.0[8].clone());
 
     let func = define_f(&vals.0, &vals.1);
-    let point_to_find: Vector4<FLO> = Vector4::from_vec(vec![0.04,1.0,32.0,1.0]);
+    //let point_to_find: Vector4<FLO> = Vector4::from_vec(vec![0.04,1.0,32.0,1.0]);
     println!("{}", func(start));
 
     
@@ -395,8 +400,17 @@ fn main() {
 
     struct FuncToMin<'a> {
         point_to_find: Vector4<FLO>,
-        base_point: Vector4<FLO>,
-        fun: Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a>,
+        fun: &'a Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a>,
+    }
+
+    impl FuncToMin<'_> {
+        fn norm_func(&self, p: &Vector4<FLO>) -> FLO {
+            ((self.fun)(*p)[2]-self.point_to_find[2]).powi(2)+((self.fun)(*p)[3]-self.point_to_find[3]).powi(2)
+            //((self.fun)(*p) - self.point_to_find).norm()
+        }
+        fn array_norm_func(&self, y: Array1<FLO>) -> FLO {
+            self.norm_func(&Vector4::from_column_slice(y.as_slice().unwrap()))
+        }
     }
 
     impl CostFunction for FuncToMin<'_> {
@@ -407,11 +421,13 @@ fn main() {
         /// Apply the cost function to a parameter `p`
         fn cost(&self, p: &Self::Param) -> Result<Self::Output, Error> {
             //Outside of the ball of radius one around this point I wanna make the cost super high
-            if (p-self.base_point).norm() > DELTA {
-                return Ok(((self.fun)(*p)[2]-self.point_to_find[2]).powi(2)+((self.fun)(*p)[3]-self.point_to_find[3]).powi(2)*1000.0+1000.0);
-            }
-            // Evaluate 2D Rosenbrock function
-            Ok(((self.fun)(*p)[2]-self.point_to_find[2]).powi(2)+((self.fun)(*p)[3]-self.point_to_find[3]).powi(2))
+            // if (p-self.base_point).norm() > DELTA {
+            //     return Ok(10e15)//((self.fun)(*p)[2]-self.point_to_find[2]).powi(2)+((self.fun)(*p)[3]-self.point_to_find[3]).powi(2)*1000.0+1000.0);
+            // }
+            //else {
+                print!("{} ", self.norm_func(p));
+                Ok(self.norm_func(p))
+            //}
         }
     }
 
@@ -420,73 +436,113 @@ fn main() {
         type Param = Vector4<FLO>;
         /// Type of the gradient
         type Gradient = Vector4<FLO>;
-
         /// Compute the gradient at parameter `p`.
         fn gradient(&self, p: &Self::Param) -> Result<Self::Gradient, Error> {
+            //let func2 = {|y| self.array_norm_func(y)};
+            //let func2 = {|y: &Array1<FLO>| self.norm_func(&Vector4::from_column_slice(y.as_slice().unwrap()))};
+            
+            let grad = FiniteDiff::central_diff(&Array1::from_vec(vec![p[0],p[1],p[2],p[3]]), &{|x| self.array_norm_func(x.clone()) });
+            Ok(Vector4::from_column_slice(grad.as_slice().unwrap()))
+
+            //Ok(y.forward_diff(&func2))
+            // if (p-self.base_point).norm() > DELTA {
+            //     return Ok(Vector4::from_vec(vec![f32::MAX/100.0,f32::MAX/100.0,f32::MAX/100.0,f32::MAX/100.0]))//((self.fun)(*p)[2]-self.point_to_find[2]).powi(2)+((self.fun)(*p)[3]-self.point_to_find[3]).powi(2)*1000.0+1000.0);
+            // }
             // Compute gradient of 2D Rosenbrock function
-            let val1 = (self.fun)(*p + Vector4::from_vec(vec![10e-7,0.0,0.0,0.0]));
-            let val2 = (self.fun)(*p - Vector4::from_vec(vec![10e-7,0.0,0.0,0.0]));
-            let val3 = (self.fun)(*p + Vector4::from_vec(vec![0.0,10e-7,0.0,0.0]));
-            let val4 = (self.fun)(*p - Vector4::from_vec(vec![0.0,10e-7,0.0,0.0]));
-            let val5 = (self.fun)(*p + Vector4::from_vec(vec![0.0,0.0,10e-7,0.0]));
-            let val6 = (self.fun)(*p - Vector4::from_vec(vec![0.0,0.0,10e-7,0.0]));
-            let val7 = (self.fun)(*p + Vector4::from_vec(vec![0.0,0.0,0.0,10e-7]));
-            let val8 = (self.fun)(*p - Vector4::from_vec(vec![0.0,0.0,0.0,10e-7]));
-            Ok(Vector4::from_vec(vec![2.0/10e-7*(
-                (val1[2]-self.point_to_find[2]).powi(2)
-                +(val1[3]-self.point_to_find[3]).powi(2)
-                -(val2[2]-self.point_to_find[2]).powi(2)
-                -(val2[3]-self.point_to_find[3]).powi(2)),
-                2.0/10e-7*(
-                (val3[2]-self.point_to_find[2]).powi(2)
-                +(val3[3]-self.point_to_find[3]).powi(2)
-                -(val4[2]-self.point_to_find[2]).powi(2)
-                -(val4[3]-self.point_to_find[3]).powi(2)),
-                2.0/10e-7*(
-                (val5[2]-self.point_to_find[2]).powi(2)
-                +(val5[3]-self.point_to_find[3]).powi(2)
-                -(val6[2]-self.point_to_find[2]).powi(2)
-                -(val6[3]-self.point_to_find[3]).powi(2)),
-                2.0/10e-7*(
-                (val7[2]-self.point_to_find[2]).powi(2)
-                +(val7[3]-self.point_to_find[3]).powi(2)
-                -(val8[2]-self.point_to_find[2]).powi(2)
-                -(val8[3]-self.point_to_find[3]).powi(2))]))
+            // let val1 = (self.fun)(*p + Vector4::from_vec(vec![10e-7,0.0,0.0,0.0]));
+            // let val2 = (self.fun)(*p - Vector4::from_vec(vec![10e-7,0.0,0.0,0.0]));
+            // let val3 = (self.fun)(*p + Vector4::from_vec(vec![0.0,10e-7,0.0,0.0]));
+            // let val4 = (self.fun)(*p - Vector4::from_vec(vec![0.0,10e-7,0.0,0.0]));
+            // let val5 = (self.fun)(*p + Vector4::from_vec(vec![0.0,0.0,10e-7,0.0]));
+            // let val6 = (self.fun)(*p - Vector4::from_vec(vec![0.0,0.0,10e-7,0.0]));
+            // let val7 = (self.fun)(*p + Vector4::from_vec(vec![0.0,0.0,0.0,10e-7]));
+            // let val8 = (self.fun)(*p - Vector4::from_vec(vec![0.0,0.0,0.0,10e-7]));
+            // Ok(Vector4::from_vec(vec![2.0/10e-7*(
+            //     (val1[2]-self.point_to_find[2]).powi(2)
+            //     +(val1[3]-self.point_to_find[3]).powi(2)
+            //     -(val2[2]-self.point_to_find[2]).powi(2)
+            //     -(val2[3]-self.point_to_find[3]).powi(2)),
+            //     2.0/10e-7*(
+            //     (val3[2]-self.point_to_find[2]).powi(2)
+            //     +(val3[3]-self.point_to_find[3]).powi(2)
+            //     -(val4[2]-self.point_to_find[2]).powi(2)
+            //     -(val4[3]-self.point_to_find[3]).powi(2)),
+            //     2.0/10e-7*(
+            //     (val5[2]-self.point_to_find[2]).powi(2)
+            //     +(val5[3]-self.point_to_find[3]).powi(2)
+            //     -(val6[2]-self.point_to_find[2]).powi(2)
+            //     -(val6[3]-self.point_to_find[3]).powi(2)),
+            //     2.0/10e-7*(
+            //     (val7[2]-self.point_to_find[2]).powi(2)
+            //     +(val7[3]-self.point_to_find[3]).powi(2)
+            //     -(val8[2]-self.point_to_find[2]).powi(2)
+            //     -(val8[3]-self.point_to_find[3]).powi(2))]))
+        }
+    }
+
+    impl Hessian for FuncToMin<'_> {
+        type Param = Vector4<FLO>;
+        /// Type of the gradient
+        type Hessian = Matrix4<FLO>;
+    
+        /// Compute gradient of rosenbrock function
+        fn hessian(&self, p: &Self::Param) -> Result<Self::Hessian, Error> {
+            //let func2 = {|y: &Array1<FLO>| self.norm_func(Vector4::from_column_slice(y.as_slice().unwrap()))};
+            let grad = FiniteDiff::forward_hessian_nograd(&Array1::from_vec(vec![p[0],p[1],p[2],p[3]]), &{|x| self.array_norm_func(x.clone()) });
+            //let grad = FiniteDiff::forward_hessian_nograd(&y, &func2);
+            println!("{}", grad);
+
+            Ok(Matrix4::new(
+                grad[(0,0)], grad[(0,1)], grad[(0,2)],grad[(0,3)],
+                grad[(1,0)], grad[(1,1)], grad[(1,2)],grad[(1,3)],
+                grad[(2,0)], grad[(2,1)], grad[(2,2)],grad[(2,3)],
+                grad[(3,0)], grad[(3,1)], grad[(3,2)],grad[(3,3)],
+            ))
+            //Ok(Matrix4::from_column_slice(grad.as_slice().unwrap()))
+            //Ok(rosenbrock_2d_hessian(param, 1.0, 100.0))
         }
     }
     //let func2 = func.clone();
     //let fun2 = Box::new(func);
-    println!("{}", ((func)(start)[2]-point_to_find[2]).powi(2)+((func)(start)[3]-point_to_find[3]).powi(2));
-    let cost = FuncToMin {point_to_find, base_point:start, fun: func};
-    let linesearch: MoreThuenteLineSearch<Vector4<FLO>, Vector4<FLO>, FLO> = MoreThuenteLineSearch::new();
-    let solver = SteepestDescent::new(linesearch);
+    //println!("{}", ((func)(start)[2]-point_to_find[2]).powi(2)+((func)(start)[3]-point_to_find[3]).powi(2));
+    let cost = FuncToMin {point_to_find, fun: &func};
+    
+    println!("{}", &cost.norm_func(&start));
+    println!("{}", &cost.norm_func(&(start + Vector4::from_vec(vec![DELTA/2.0,DELTA/2.0,DELTA/2.0,DELTA/2.0]))));
 
-    let res = Executor::new(cost, solver)
+    let cp = argmin::solver::trustregion::CauchyPoint::new();
+    let tr = TrustRegion::new(cp).with_max_radius(DELTA).unwrap().with_radius(DELTA/10.0).unwrap();
+
+    //let linesearch: MoreThuenteLineSearch<Vector4<FLO>, Vector4<FLO>, FLO> = MoreThuenteLineSearch::new()
+    //    .with_bounds(DELTA/100000.0,DELTA/10000.0).expect("msg");
+    //let solver = SteepestDescent::new(linesearch);
+
+    let res = Executor::new(cost, tr)
     // Via `configure`, one has access to the internally used state.
     // This state can be initialized, for instance by providing an
     // initial parameter vector.
     // The maximum number of iterations is also set via this method.
-    // In this particular case, the state exposed is of type `IterState`.
-    // The documentation of `IterState` shows how this struct can be
-    // manipulated.
+    // In this particular case, the state exposed isstart
     // Population based solvers use `PopulationState` instead of 
     // `IterState`.
     .configure(|state|
         state
             // Set initial parameters (depending on the solver,
             // this may be required)
-            .param(point_to_find)
+            .param(start)
             // Set maximum iterations to 10
             // (optional, set to `std::u64::MAX` if not provided)
-            .max_iters(10)
+            .max_iters(5)
             // Set target cost. The solver stops when this cost
             // function value is reached (optional)
-            .target_cost(0.0)
+            //.target_cost(0.0)
     )
     // run the solver on the defined problem
-    .run().expect("Thing");
+    .run().unwrap();
     println!("{}", res);
-    // Best parameter vector
+    println!("starting point was {}", start);
+ 
+    //Best parameter vector
     // let best = res.state().get_best_param().unwrap();
 
     // // Cost function value associated with best parameter vector
