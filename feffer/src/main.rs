@@ -342,6 +342,70 @@ fn check_r (max_clique: Vec<NAB>, points: &Vec<Vector6<FLO>>, r: FLO) {
     //let max_dists = x_ones.zip(projs).zip(points_q).map(|(wp,q)| wp.0.iter().map(|w| coords(&w)-wp.1*coords(&w) + coords(&q)));
 }
 
+struct FuncToMin<'a> {
+    point_to_find: Vector4<FLO>,
+    fun: &'a Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a>,
+}
+
+impl FuncToMin<'_> {
+    fn norm_func(&self, p: &Vector4<FLO>) -> FLO {
+        ((self.fun)(*p)[2]-self.point_to_find[2]).powi(2)+((self.fun)(*p)[3]-self.point_to_find[3]).powi(2)
+        //((self.fun)(*p) - self.point_to_find).norm()
+    }
+    fn array_norm_func(&self, y: Array1<FLO>) -> FLO {
+        self.norm_func(&Vector4::from_column_slice(y.as_slice().unwrap()))
+    }
+    fn array_gradient(&self, y: Array1<FLO>) -> Vector4<FLO> {
+        self.gradient(&Vector4::from_column_slice(y.as_slice().unwrap())).unwrap()
+    }
+}
+
+impl CostFunction for FuncToMin<'_> {
+    /// Type of the parameter vector
+    type Param = Vector4<FLO>;
+    /// Type of the return value computed by the cost function
+    type Output = FLO;
+    /// Apply the cost function to a parameter `p`
+    fn cost(&self, p: &Self::Param) -> Result<Self::Output, Error> {
+        print!("{} ", self.norm_func(p));
+        Ok(self.norm_func(p))
+    }
+}
+
+impl Gradient for FuncToMin<'_> {
+    /// Type of the parameter vector
+    type Param = Vector4<FLO>;
+    /// Type of the gradient
+    type Gradient = Vector4<FLO>;
+    /// Compute the gradient at parameter `p`.
+    fn gradient(&self, p: &Self::Param) -> Result<Self::Gradient, Error> {            
+        let grad = FiniteDiff::central_diff(&Array1::from_vec(vec![p[0],p[1],p[2],p[3]]), &{|x| self.array_norm_func(x.clone()) });
+        Ok(Vector4::from_column_slice(grad.as_slice().unwrap()))
+    }
+}
+
+impl Hessian for FuncToMin<'_> {
+    type Param = Vector4<FLO>;
+    /// Type of the gradient
+    type Hessian = Matrix4<FLO>;
+
+    /// Compute gradient of rosenbrock function
+    fn hessian(&self, p: &Self::Param) -> Result<Self::Hessian, Error> {
+        //let func2 = {|y: &Array1<FLO>| self.norm_func(Vector4::from_column_slice(y.as_slice().unwrap()))};
+        let grad = FiniteDiff::central_hessian(&Array1::from_vec(vec![p[0],p[1],p[2],p[3]]), &{|x| Array1::from_vec(vec![self.array_gradient(x.clone())[0],self.array_gradient(x.clone())[1],self.array_gradient(x.clone())[2],self.array_gradient(x.clone())[3]])});//self.array_norm_func(x.clone()) });
+        //let grad = FiniteDiff::forward_hessian_nograd(&y, &func2);
+        println!("{}", grad);
+
+        Ok(Matrix4::new(
+            grad[(0,0)], grad[(0,1)], grad[(0,2)],grad[(0,3)],
+            grad[(1,0)], grad[(1,1)], grad[(1,2)],grad[(1,3)],
+            grad[(2,0)], grad[(2,1)], grad[(2,2)],grad[(2,3)],
+            grad[(3,0)], grad[(3,1)], grad[(3,2)],grad[(3,3)],
+        ))
+        //Ok(Matrix4::from_column_slice(grad.as_slice().unwrap()))
+        //Ok(rosenbrock_2d_hessian(param, 1.0, 100.0))
+    }
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -359,7 +423,6 @@ fn main() {
     }
     println!("We are choosing r to be {}", divisor_r);
     let file_path = &args[1];
-
 
     let now = std::time::Instant::now();
     let arr = read_file_to_mat(file_path);
@@ -387,8 +450,8 @@ fn main() {
     let vals = get_qs(max_clique.clone(), &arr);
     let elapsed_time2 = now2.elapsed();
     println!("It took {} micro seconds to calc {} qr decomps", elapsed_time2.as_micros(), vals.0.len());
-    let start = coords(&vals.0[4].clone());
-    let point_to_find = coords(&vals.0[8].clone());
+    let start = coords(&vals.0[6].clone()); //4
+    let point_to_find = coords(&vals.0[8].clone());//8
 
     let func = define_f(&vals.0, &vals.1);
     //let point_to_find: Vector4<FLO> = Vector4::from_vec(vec![0.04,1.0,32.0,1.0]);
@@ -398,120 +461,14 @@ fn main() {
 
     check_r(max_clique, &arr, divisor_r);
 
-    struct FuncToMin<'a> {
-        point_to_find: Vector4<FLO>,
-        fun: &'a Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a>,
-    }
 
-    impl FuncToMin<'_> {
-        fn norm_func(&self, p: &Vector4<FLO>) -> FLO {
-            ((self.fun)(*p)[2]-self.point_to_find[2]).powi(2)+((self.fun)(*p)[3]-self.point_to_find[3]).powi(2)
-            //((self.fun)(*p) - self.point_to_find).norm()
-        }
-        fn array_norm_func(&self, y: Array1<FLO>) -> FLO {
-            self.norm_func(&Vector4::from_column_slice(y.as_slice().unwrap()))
-        }
-    }
-
-    impl CostFunction for FuncToMin<'_> {
-        /// Type of the parameter vector
-        type Param = Vector4<FLO>;
-        /// Type of the return value computed by the cost function
-        type Output = FLO;
-        /// Apply the cost function to a parameter `p`
-        fn cost(&self, p: &Self::Param) -> Result<Self::Output, Error> {
-            //Outside of the ball of radius one around this point I wanna make the cost super high
-            // if (p-self.base_point).norm() > DELTA {
-            //     return Ok(10e15)//((self.fun)(*p)[2]-self.point_to_find[2]).powi(2)+((self.fun)(*p)[3]-self.point_to_find[3]).powi(2)*1000.0+1000.0);
-            // }
-            //else {
-                print!("{} ", self.norm_func(p));
-                Ok(self.norm_func(p))
-            //}
-        }
-    }
-
-    impl Gradient for FuncToMin<'_> {
-        /// Type of the parameter vector
-        type Param = Vector4<FLO>;
-        /// Type of the gradient
-        type Gradient = Vector4<FLO>;
-        /// Compute the gradient at parameter `p`.
-        fn gradient(&self, p: &Self::Param) -> Result<Self::Gradient, Error> {
-            //let func2 = {|y| self.array_norm_func(y)};
-            //let func2 = {|y: &Array1<FLO>| self.norm_func(&Vector4::from_column_slice(y.as_slice().unwrap()))};
-            
-            let grad = FiniteDiff::central_diff(&Array1::from_vec(vec![p[0],p[1],p[2],p[3]]), &{|x| self.array_norm_func(x.clone()) });
-            Ok(Vector4::from_column_slice(grad.as_slice().unwrap()))
-
-            //Ok(y.forward_diff(&func2))
-            // if (p-self.base_point).norm() > DELTA {
-            //     return Ok(Vector4::from_vec(vec![f32::MAX/100.0,f32::MAX/100.0,f32::MAX/100.0,f32::MAX/100.0]))//((self.fun)(*p)[2]-self.point_to_find[2]).powi(2)+((self.fun)(*p)[3]-self.point_to_find[3]).powi(2)*1000.0+1000.0);
-            // }
-            // Compute gradient of 2D Rosenbrock function
-            // let val1 = (self.fun)(*p + Vector4::from_vec(vec![10e-7,0.0,0.0,0.0]));
-            // let val2 = (self.fun)(*p - Vector4::from_vec(vec![10e-7,0.0,0.0,0.0]));
-            // let val3 = (self.fun)(*p + Vector4::from_vec(vec![0.0,10e-7,0.0,0.0]));
-            // let val4 = (self.fun)(*p - Vector4::from_vec(vec![0.0,10e-7,0.0,0.0]));
-            // let val5 = (self.fun)(*p + Vector4::from_vec(vec![0.0,0.0,10e-7,0.0]));
-            // let val6 = (self.fun)(*p - Vector4::from_vec(vec![0.0,0.0,10e-7,0.0]));
-            // let val7 = (self.fun)(*p + Vector4::from_vec(vec![0.0,0.0,0.0,10e-7]));
-            // let val8 = (self.fun)(*p - Vector4::from_vec(vec![0.0,0.0,0.0,10e-7]));
-            // Ok(Vector4::from_vec(vec![2.0/10e-7*(
-            //     (val1[2]-self.point_to_find[2]).powi(2)
-            //     +(val1[3]-self.point_to_find[3]).powi(2)
-            //     -(val2[2]-self.point_to_find[2]).powi(2)
-            //     -(val2[3]-self.point_to_find[3]).powi(2)),
-            //     2.0/10e-7*(
-            //     (val3[2]-self.point_to_find[2]).powi(2)
-            //     +(val3[3]-self.point_to_find[3]).powi(2)
-            //     -(val4[2]-self.point_to_find[2]).powi(2)
-            //     -(val4[3]-self.point_to_find[3]).powi(2)),
-            //     2.0/10e-7*(
-            //     (val5[2]-self.point_to_find[2]).powi(2)
-            //     +(val5[3]-self.point_to_find[3]).powi(2)
-            //     -(val6[2]-self.point_to_find[2]).powi(2)
-            //     -(val6[3]-self.point_to_find[3]).powi(2)),
-            //     2.0/10e-7*(
-            //     (val7[2]-self.point_to_find[2]).powi(2)
-            //     +(val7[3]-self.point_to_find[3]).powi(2)
-            //     -(val8[2]-self.point_to_find[2]).powi(2)
-            //     -(val8[3]-self.point_to_find[3]).powi(2))]))
-        }
-    }
-
-    impl Hessian for FuncToMin<'_> {
-        type Param = Vector4<FLO>;
-        /// Type of the gradient
-        type Hessian = Matrix4<FLO>;
-    
-        /// Compute gradient of rosenbrock function
-        fn hessian(&self, p: &Self::Param) -> Result<Self::Hessian, Error> {
-            //let func2 = {|y: &Array1<FLO>| self.norm_func(Vector4::from_column_slice(y.as_slice().unwrap()))};
-            let grad = FiniteDiff::forward_hessian_nograd(&Array1::from_vec(vec![p[0],p[1],p[2],p[3]]), &{|x| self.array_norm_func(x.clone()) });
-            //let grad = FiniteDiff::forward_hessian_nograd(&y, &func2);
-            println!("{}", grad);
-
-            Ok(Matrix4::new(
-                grad[(0,0)], grad[(0,1)], grad[(0,2)],grad[(0,3)],
-                grad[(1,0)], grad[(1,1)], grad[(1,2)],grad[(1,3)],
-                grad[(2,0)], grad[(2,1)], grad[(2,2)],grad[(2,3)],
-                grad[(3,0)], grad[(3,1)], grad[(3,2)],grad[(3,3)],
-            ))
-            //Ok(Matrix4::from_column_slice(grad.as_slice().unwrap()))
-            //Ok(rosenbrock_2d_hessian(param, 1.0, 100.0))
-        }
-    }
-    //let func2 = func.clone();
-    //let fun2 = Box::new(func);
-    //println!("{}", ((func)(start)[2]-point_to_find[2]).powi(2)+((func)(start)[3]-point_to_find[3]).powi(2));
     let cost = FuncToMin {point_to_find, fun: &func};
     
     println!("{}", &cost.norm_func(&start));
     println!("{}", &cost.norm_func(&(start + Vector4::from_vec(vec![DELTA/2.0,DELTA/2.0,DELTA/2.0,DELTA/2.0]))));
 
     let cp = argmin::solver::trustregion::CauchyPoint::new();
-    let tr = TrustRegion::new(cp).with_max_radius(DELTA).unwrap().with_radius(DELTA/10.0).unwrap();
+    let tr = TrustRegion::new(cp).with_max_radius(DELTA).unwrap().with_radius(DELTA/2.0).unwrap();
 
     //let linesearch: MoreThuenteLineSearch<Vector4<FLO>, Vector4<FLO>, FLO> = MoreThuenteLineSearch::new()
     //    .with_bounds(DELTA/100000.0,DELTA/10000.0).expect("msg");
