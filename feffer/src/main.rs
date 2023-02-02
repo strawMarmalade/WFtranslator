@@ -1,6 +1,7 @@
 use argmin::core::{CostFunction, Error, Gradient, Executor, State, Hessian};
 use argmin::solver::gradientdescent::SteepestDescent;
 use argmin::solver::linesearch::MoreThuenteLineSearch;
+use plotters::prelude::*;
 use argmin::solver::trustregion::TrustRegion;
 use na::{Vector6, Vector4, Matrix4x3, Matrix4};
 use finitediff::FiniteDiff;
@@ -343,13 +344,13 @@ fn check_r (max_clique: Vec<NAB>, points: &Vec<Vector6<FLO>>, r: FLO) {
 }
 
 struct FuncToMin<'a> {
-    point_to_find: Vector4<FLO>,
+    point_to_find: &'a Vector4<FLO>,
     fun: &'a Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a>,
 }
 
 impl FuncToMin<'_> {
     fn norm_func(&self, p: &Vector4<FLO>) -> FLO {
-        ((self.fun)(*p)[2]-self.point_to_find[2]).powi(2)+((self.fun)(*p)[3]-self.point_to_find[3]).powi(2)
+        FLO::sqrt(((self.fun)(*p)[2]-self.point_to_find[2]).powi(2)+((self.fun)(*p)[3]-self.point_to_find[3]).powi(2))
         //((self.fun)(*p) - self.point_to_find).norm()
     }
     fn array_norm_func(&self, y: Array1<FLO>) -> FLO {
@@ -379,7 +380,8 @@ impl Gradient for FuncToMin<'_> {
     type Gradient = Vector4<FLO>;
     /// Compute the gradient at parameter `p`.
     fn gradient(&self, p: &Self::Param) -> Result<Self::Gradient, Error> {            
-        let grad = FiniteDiff::central_diff(&Array1::from_vec(vec![p[0],p[1],p[2],p[3]]), &{|x| self.array_norm_func(x.clone()) });
+        let grad = FiniteDiff::forward_diff(&Array1::from_vec(vec![p[0],p[1],p[2],p[3]]), &{|x| self.array_norm_func(x.clone()) });
+        println!("{}", grad);
         Ok(Vector4::from_column_slice(grad.as_slice().unwrap()))
     }
 }
@@ -405,6 +407,48 @@ impl Hessian for FuncToMin<'_> {
         //Ok(Matrix4::from_column_slice(grad.as_slice().unwrap()))
         //Ok(rosenbrock_2d_hessian(param, 1.0, 100.0))
     }
+}
+
+fn solve<'a>(points_at_clique: &Vec<Vector6<FLO>>, func: &'a Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a>, point_to_find: &Vector4<FLO>) {
+
+    for start in points_at_clique.into_iter().map(|q| coords(&q)) {
+        let cost = FuncToMin {point_to_find, fun: func};
+    
+        println!("{}", &cost.norm_func(&start));
+        println!("{}", &cost.norm_func(&(start + Vector4::from_vec(vec![DELTA/2.0,DELTA/2.0,DELTA/2.0,DELTA/2.0]))));
+    
+        let cp = argmin::solver::trustregion::CauchyPoint::new();
+        let tr = TrustRegion::new(cp).with_max_radius(DELTA).unwrap().with_radius(DELTA/10.0).unwrap();
+    
+        //let linesearch: MoreThuenteLineSearch<Vector4<FLO>, Vector4<FLO>, FLO> = MoreThuenteLineSearch::new()
+        //    .with_bounds(DELTA/100000.0,DELTA/10000.0).expect("msg");
+        //let solver = SteepestDescent::new(linesearch);
+    
+        let res = Executor::new(cost, tr)
+        // Via `configure`, one has access to the internally used state.
+        // This state can be initialized, for instance by providing an
+        // initial parameter vector.
+        // The maximum number of iterations is also set via this method.
+        // In this particular case, the state exposed isstart
+        // Population based solvers use `PopulationState` instead of 
+        // `IterState`.
+        .configure(|state|
+            state
+                // Set initial parameters (depending on the solver,
+                // this may be required)
+                .param(start)
+                // Set maximum iterations to 10
+                // (optional, set to `std::u64::MAX` if not provided)
+                .max_iters(5)
+                // Set target cost. The solver stops when this cost
+                // function value is reached (optional)
+                //.target_cost(0.0)
+        )
+        // run the solver on the defined problem
+        .run().unwrap();
+        println!("{}", res);
+        println!("starting point was {}", start);
+    }    
 }
 
 fn main() {
@@ -442,7 +486,10 @@ fn main() {
         println!("We are in non-chunking mode");
         chunk_size = len as NAB + 1;
     }
-    let max_clique = chunk_clique(chunk_size, &(0..(len as NAB)).collect::<Vec<NAB>>(), &arr, divisor_r, 2);
+    let max_clique = vec![654, 622, 606, 550, 481, 293, 199, 82, 183, 90, 155, 490, 110, 994, 120, 121, 990, 128, 129, 137, 138, 144, 145, 151, 102, 156, 161, 165, 169, 170, 93, 175, 179, 92, 184, 1014, 191, 192, 195, 85, 81, 200, 1018, 875, 218, 219, 76, 222, 225, 845, 232, 841, 73, 242, 243, 72, 1037, 253, 256, 262, 263, 1049, 68, 270, 271, 276, 277, 281, 1059, 285, 290, 294, 64, 299, 1168, 1222, 1355, 658, 655, 546, 649, 648, 646, 640, 1317, 636, 1307, 1303, 623, 618, 617, 612, 611, 605, 602, 599, 598, 595, 594, 585, 581, 580, 577, 576, 573, 572, 567, 566, 560, 1377, 1373, 549, 556, 107, 1226, 422, 423, 426, 427, 542, 538, 535, 534, 438, 441, 442, 531, 446, 447, 450, 451, 454, 455, 530, 460, 461, 466, 467, 472, 473, 476, 477, 480, 54, 484, 487, 48, 527, 491, 526, 496, 497, 502, 503, 504, 505, 510, 511, 519, 520, 1359, 513, 514, 44, 1365, 39, 38, 522, 523, 495, 494, 47, 51, 53, 58, 34, 59, 1369, 435, 434, 433, 541, 432, 543, 61, 1368, 416, 413, 412, 1376, 411, 410, 547, 557, 407, 559, 406, 403, 564, 565, 402, 1227, 1381, 1382, 397, 396, 393, 392, 1230, 1234, 1240, 1242, 584, 1248, 588, 589, 590, 591, 1249, 1252, 1256, 1269, 1260, 1264, 1268, 1272, 603, 1386, 1273, 1387, 1390, 1278, 1282, 615, 1394, 1283, 1285, 1288, 1398, 1289, 1291, 1402, 629, 630, 1294, 632, 1295, 1406, 635, 1299, 1311, 639, 1313, 641, 1321, 1412, 645, 1323, 1324, 1327, 1329, 1420, 1437, 1438, 1335, 1341, 661, 662, 1349, 665, 1351, 668, 669, 670, 671, 674, 675, 676, 321, 679, 680, 320, 319, 1218, 1211, 1210, 1206, 1202, 1198, 1194, 1191, 316, 1188, 1186, 313, 1181, 1180, 1178, 1177, 312, 1174, 1172, 1167, 718, 719, 309, 308, 1163, 1162, 1160, 1159, 239, 1154, 1152, 1151, 305, 304, 1147, 1146, 1143, 1142, 1140, 1361, 1135, 1134, 751, 1128, 756, 757, 1121, 1120, 1103, 1102, 1095, 1091, 1087, 1083, 1080, 1079, 301, 1076, 1075, 1069, 1068, 300, 1065, 1063, 298, 1060, 284, 791, 282, 1055, 1054, 1053, 1052, 799, 278, 67, 265, 1048, 264, 1045, 1044, 809, 1041, 257, 813, 817, 1036, 249, 821, 822, 248, 247, 826, 827, 246, 831, 1032, 833, 1031, 69, 1029, 837, 228, 238, 237, 842, 236, 231, 846, 229, 849, 1025, 1024, 853, 856, 857, 860, 861, 864, 865, 1022, 869, 871, 872, 109, 1021, 226, 215, 214, 211, 208, 881, 884, 885, 887, 888, 207, 1017, 891, 893, 894, 206, 77, 196, 899, 186, 901, 1013, 91, 906, 907, 178, 1010, 911, 1006, 172, 916, 917, 920, 921, 1003, 923, 162, 160, 928, 929, 930, 931, 100, 101, 934, 935, 938, 939, 152, 147, 942, 943, 949, 956, 957, 960, 961, 964, 966, 146, 969, 970, 974, 976, 977, 139, 980, 981, 984, 986, 131, 989, 130, 123, 122, 995, 115, 114, 998, 999, 1000, 362, 983, 946, 985, 936, 948, 971, 937, 973, 991, 950, 993, 975, 951, 952, 963, 953, 965, 944, 945, 900, 924, 922, 1005, 913, 1007, 1008, 1009, 912, 1011, 910, 908, 902, 794, 898, 896, 890, 880, 878, 876, 874, 868, 866, 852, 850, 848, 1028, 838, 1030, 836, 834, 832, 830, 828, 819, 818, 816, 814, 1040, 812, 1042, 1043, 810, 808, 806, 805, 804, 803, 802, 801, 800, 798, 796, 795, 772, 793, 1058, 792, 790, 788, 787, 786, 1064, 785, 1066, 784, 783, 782, 781, 1071, 1072, 1073, 1074, 780, 779, 778, 777, 776, 775, 1081, 774, 773, 1084, 702, 1086, 771, 1088, 770, 1090, 769, 1092, 768, 1094, 767, 1096, 766, 1098, 1099, 1100, 1101, 765, 764, 763, 762, 1106, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1115, 1116, 1117, 1118, 1119, 761, 760, 759, 758, 1124, 1125, 1126, 1127, 753, 1129, 752, 1131, 1132, 1133, 750, 748, 747, 746, 745, 1139, 744, 1141, 743, 742, 741, 740, 739, 738, 737, 736, 735, 734, 733, 732, 731, 1155, 730, 1157, 729, 728, 727, 726, 725, 724, 723, 722, 721, 720, 715, 714, 713, 1171, 712, 1173, 711, 1175, 710, 709, 708, 707, 706, 705, 704, 703, 647, 1185, 701, 1187, 700, 1189, 699, 698, 697, 696, 695, 1195, 1196, 1197, 694, 1199, 693, 1201, 692, 1203, 691, 1205, 690, 1207, 689, 1209, 688, 687, 686, 685, 1214, 1215, 1216, 1217, 684, 1219, 683, 1221, 682, 1223, 681, 388, 512, 417, 401, 1229, 400, 1231, 391, 1233, 390, 1235, 1236, 1237, 389, 1239, 345, 1241, 387, 1243, 386, 1245, 385, 384, 383, 382, 1250, 1251, 381, 1253, 380, 1255, 379, 1257, 378, 1259, 377, 1261, 376, 1263, 375, 1265, 1266, 1267, 374, 373, 372, 371, 370, 369, 1274, 1275, 368, 1277, 367, 1279, 366, 365, 364, 363, 1284, 0, 361, 360, 359, 358, 1290, 357, 356, 355, 354, 353, 1296, 1297, 1298, 352, 1300, 351, 1302, 350, 1304, 349, 1306, 348, 1308, 347, 1310, 346, 1312, 324, 1314, 344, 1316, 343, 1318, 342, 1320, 341, 340, 339, 338, 337, 1326, 336, 1328, 335, 1330, 334, 1332, 333, 1334, 332, 1336, 1337, 1338, 331, 1340, 330, 1342, 1343, 1344, 1345, 1346, 329, 1348, 328, 1350, 327, 1352, 326, 1354, 325, 1356, 209, 1358, 1, 1360, 45, 1362, 43, 1364, 42, 1366, 1367, 37, 35, 33, 32, 1372, 31, 30, 29, 28, 27, 1378, 26, 1380, 25, 24, 1383, 23, 22, 21, 20, 19, 1389, 18, 1391, 17, 1393, 16, 1395, 15, 1397, 14, 1399, 13, 1401, 12, 1403, 11, 1405, 10, 1407, 1408, 1409, 9, 1411, 8, 1413, 1414, 1415, 1416, 1417, 7, 1419, 6, 1421, 1422, 1423, 1424, 1425, 1426, 1427, 1428, 1429, 1430, 1431, 1432, 1433, 1434, 1435, 5, 4, 3, 2, 289];
+    
+    
+    //chunk_clique(chunk_size, &(0..(len as NAB)).collect::<Vec<NAB>>(), &arr, divisor_r, 2);
 
     println!("Found max clique of len {}: {:?}", max_clique.len(), max_clique);
 
@@ -450,10 +497,31 @@ fn main() {
     let vals = get_qs(max_clique.clone(), &arr);
     let elapsed_time2 = now2.elapsed();
     println!("It took {} micro seconds to calc {} qr decomps", elapsed_time2.as_micros(), vals.0.len());
-    let start = coords(&vals.0[6].clone()); //4
+    let start = coords(&vals.0[8].clone()); //4
     let point_to_find = coords(&vals.0[8].clone());//8
 
     let func = define_f(&vals.0, &vals.1);
+
+    let cost = FuncToMin {point_to_find: &point_to_find, fun: &func};
+    
+    println!("{}", &cost.norm_func(&start));
+
+    let root_drawing_area = BitMapBackend::new("/home/leo/Documents/work/WFtranslator/feffer/images/0.6.png", (1024, 768))
+    .into_drawing_area();
+
+    root_drawing_area.fill(&WHITE).unwrap();
+
+    let mut chart = ChartBuilder::on(&root_drawing_area)
+        .build_cartesian_2d(-DELTA*100.0..DELTA*100.0, (cost.norm_func(&start)-0.01)..(cost.norm_func(&start)+0.01))
+        .unwrap();
+
+    chart.draw_series(LineSeries::new(
+        (-(f64::ceil(DELTA*100.0) as i32)..(f64::ceil(DELTA*100.0) as i32)).map(|x| x as f64 / 1.0).map(|x| (x, cost.norm_func(&(start + Vector4::from_vec(vec![x,0.0,0.0,0.0]))))),
+        &RED
+    )).unwrap();
+
+
+    //solve(&vals.0, &func, &point_to_find);
     //let point_to_find: Vector4<FLO> = Vector4::from_vec(vec![0.04,1.0,32.0,1.0]);
     println!("{}", func(start));
 
@@ -462,42 +530,7 @@ fn main() {
     check_r(max_clique, &arr, divisor_r);
 
 
-    let cost = FuncToMin {point_to_find, fun: &func};
     
-    println!("{}", &cost.norm_func(&start));
-    println!("{}", &cost.norm_func(&(start + Vector4::from_vec(vec![DELTA/2.0,DELTA/2.0,DELTA/2.0,DELTA/2.0]))));
-
-    let cp = argmin::solver::trustregion::CauchyPoint::new();
-    let tr = TrustRegion::new(cp).with_max_radius(DELTA).unwrap().with_radius(DELTA/2.0).unwrap();
-
-    //let linesearch: MoreThuenteLineSearch<Vector4<FLO>, Vector4<FLO>, FLO> = MoreThuenteLineSearch::new()
-    //    .with_bounds(DELTA/100000.0,DELTA/10000.0).expect("msg");
-    //let solver = SteepestDescent::new(linesearch);
-
-    let res = Executor::new(cost, tr)
-    // Via `configure`, one has access to the internally used state.
-    // This state can be initialized, for instance by providing an
-    // initial parameter vector.
-    // The maximum number of iterations is also set via this method.
-    // In this particular case, the state exposed isstart
-    // Population based solvers use `PopulationState` instead of 
-    // `IterState`.
-    .configure(|state|
-        state
-            // Set initial parameters (depending on the solver,
-            // this may be required)
-            .param(start)
-            // Set maximum iterations to 10
-            // (optional, set to `std::u64::MAX` if not provided)
-            .max_iters(5)
-            // Set target cost. The solver stops when this cost
-            // function value is reached (optional)
-            //.target_cost(0.0)
-    )
-    // run the solver on the defined problem
-    .run().unwrap();
-    println!("{}", res);
-    println!("starting point was {}", start);
  
     //Best parameter vector
     // let best = res.state().get_best_param().unwrap();
