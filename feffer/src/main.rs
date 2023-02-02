@@ -34,7 +34,7 @@ use crate::pmcgraph::PmcGraph;
 
 type NAB = u32;
 type FLO = f64;
-const DELTA: FLO = 2000.0*0.016; //want C_{18}n\delta < C_{18}n 1/(n*20) = 6/20 
+const DELTA: FLO = 0.016; //want C_{18}n\delta < C_{18}n 1/(n*20) = 6/20 
 //const DIV: FLO = 1.0;//1.0;
 
 fn mu(x_point: &Vector4<FLO>, q_point: &Vector4<FLO>) -> FLO {
@@ -43,7 +43,7 @@ fn mu(x_point: &Vector4<FLO>, q_point: &Vector4<FLO>) -> FLO {
         / ((1.0 / (dist - 1.0 / 3.0)).exp() + (1.0 / (1.0 / 2.0 - dist)).exp())
 }
 
-fn calc_dist_from1(x0_point: &Vector6<FLO>, x_point: &Vector6<FLO>, y_vals: &[Vector6<FLO>]) -> FLO {
+fn calc_dist_from1(x0_point: &Vector4<FLO>, x_point: &Vector4<FLO>, y_vals: &[Vector4<FLO>]) -> FLO {
     if y_vals.len() != 0 {
         y_vals
             .into_iter()
@@ -68,7 +68,7 @@ fn argmin(nets: &Vec<FLO>) -> usize {
         .unwrap()
 }
 
-fn find_disc(x0_point: &Vector6<FLO>, x_vals: &Vec<Vector6<FLO>>, n: usize) -> Option<Vec<Vector6<FLO>>> {
+fn find_disc(x0_point: &Vector4<FLO>, x_vals: &Vec<Vector4<FLO>>, n: usize) -> Option<Vec<Vector4<FLO>>> {
     match x_vals.len() {
         4 => return Some(x_vals.clone()),
         0..=3 => {
@@ -76,7 +76,7 @@ fn find_disc(x0_point: &Vector6<FLO>, x_vals: &Vec<Vector6<FLO>>, n: usize) -> O
             return None    
         }
         _ =>    {
-            let mut output: Vec<Vector6<FLO>> = vec![];
+            let mut output: Vec<Vector4<FLO>> = vec![];
             let mut x_vals_copy = x_vals.clone();
             for _ in 0..n {
                 let min_index = argmin(
@@ -105,7 +105,7 @@ fn find_disc(x0_point: &Vector6<FLO>, x_vals: &Vec<Vector6<FLO>>, n: usize) -> O
 //     points.clone().into_iter().filter(|x| (x_point-*x).norm() <= 1.0).collect()
 // }
 
-fn ball_rad_r(x_point: &Vector6<FLO>, points: &Vec<Vector6<FLO>>, r: FLO) -> Vec<Vector6<FLO>> {
+fn ball_rad_r(x_point: &Vector4<FLO>, points: &Vec<Vector4<FLO>>, r: FLO) -> Vec<Vector4<FLO>> {
     points.clone()
     .into_iter()
     .filter(|x| 0.0 < (x_point-*x).norm() && (x_point-*x).norm() <= r)
@@ -120,7 +120,7 @@ fn ball_rad_r(x_point: &Vector6<FLO>, points: &Vec<Vector6<FLO>>, r: FLO) -> Vec
     // output
 }
 
-fn points_dist(points_a: &Vec<Vector6<FLO>>, points_b: &Vec<Vector6<FLO>>) -> FLO {
+fn points_dist(points_a: &Vec<Vector4<FLO>>, points_b: &Vec<Vector4<FLO>>) -> FLO {
     /*
     This goes thru every point in pointsA and checks if each point in b is var close to it
     */
@@ -136,7 +136,7 @@ fn points_dist(points_a: &Vec<Vector6<FLO>>, points_b: &Vec<Vector6<FLO>>) -> FL
     max
 }
 
-fn find_r(arr: &Vec<Vector6<FLO>>) -> Option<FLO>{
+fn find_r(arr: &Vec<Vector4<FLO>>) -> Option<FLO>{
     let mut r: FLO = 1.0;
     let mut r_abs_min: FLO = 0.0;
     let mut r_abs_max: FLO = 200.0;
@@ -196,9 +196,9 @@ fn find_r(arr: &Vec<Vector6<FLO>>) -> Option<FLO>{
     Some(r)
 }
 
-fn get_qs(max_clique: Vec<NAB>, points: &Vec<Vector6<FLO>>) -> (Vec<Vector6<FLO>>, Vec<Matrix4<FLO>>) {
+fn get_qs(max_clique: Vec<NAB>, points: &Vec<Vector6<FLO>>) -> (Vec<Vector4<FLO>>, Vec<Matrix4<FLO>>) {
     let points_q = max_clique.iter().map(|p| points[*p as usize]);
-    let points_clone = points_q.clone();
+    let points_clone = points_q.clone().map(|q| coords(&q));
     //let x_ones = points_q.clone().map(|q| ball_rad_r(&q, points,  40.0));
     //let spaces_q = points_q.zip(x_ones).map(|(q,x)| na::Matrix6x4::from_columns(&find_disc(&q, &x, 4).unwrap()));
     let projs = points_q.map(|q| proj_from_normal(q));//spaces_q
@@ -209,16 +209,23 @@ fn get_qs(max_clique: Vec<NAB>, points: &Vec<Vector6<FLO>>) -> (Vec<Vector6<FLO>
 }
 
 fn proj_from_normal(point: Vector6<FLO>) -> Matrix4<FLO>{
-    let normal: Vector4<FLO> = Vector4::from_vec(vec![FLO::cos(point[2]/180.0*PI),FLO::sin(point[2]/190.0*PI),-FLO::cos(point[5]/180.0*PI),-FLO::sin(point[5]/180.0*PI)]);
-    println!("normal: {}", normal);
-    let mat: Matrix4x3<FLO> = Matrix4x3::new(
-        -normal[1],-normal[2],-normal[3],
-        normal[0],normal[3],-normal[2],
-        -normal[3],normal[0],normal[1],
-        normal[2],-normal[1], normal[0]
-    );
-    let q = na::linalg::QR::new(mat).q();//.map(|q| q*q.transpose())
-    q*q.transpose()
+    let normal: Vector4<FLO> = Vector4::from_vec(vec![FLO::cos(PI*point[2]/180.0),FLO::sin(PI*point[2]/180.0),-FLO::cos(PI*point[5]/180.0),-FLO::sin(PI*point[5]/180.0)]);
+    //both of the following methods work the one used now is faster
+    // println!("normal: {}", point[2]);
+    // let mat: Matrix4x3<FLO> = Matrix4x3::new(
+    //     -normal[1],-normal[2],-normal[3],
+    //     normal[0],normal[3],-normal[2],
+    //     -normal[3],normal[0],normal[1],
+    //     normal[2],-normal[1], normal[0]
+    // );
+    // let q = na::linalg::QR::new(mat).q();//.map(|q| q*q.transpose())
+    // q*q.transpose()
+    -Matrix4::new(
+        normal[0]*normal[0]-2.0,normal[0]*normal[1],normal[0]*normal[2],normal[0]*normal[3],
+        normal[1]*normal[0],normal[1]*normal[1]-2.0,normal[1]*normal[2],normal[1]*normal[3],
+        normal[2]*normal[0],normal[2]*normal[1],normal[2]*normal[2]-2.0,normal[2]*normal[3],
+        normal[3]*normal[0],normal[3]*normal[1],normal[3]*normal[2],normal[3]*normal[3]-2.0,
+    )/2.0
 }
 
 fn chunk_clique(chunk_size: u32, verts: &Vec<NAB>, arr: &Vec<Vector6<FLO>>, divisor_r: FLO, increase_factor: u32) -> Vec<NAB> {
@@ -232,7 +239,7 @@ fn chunk_clique(chunk_size: u32, verts: &Vec<NAB>, arr: &Vec<Vector6<FLO>>, divi
         let mut edgs: Vec<(NAB, NAB)> = vec![];
         for j in 0..chunk_len {
             for k in 0..j {
-                if 100.0*(&arr[chunk[j] as usize] - &arr[chunk[k] as usize])
+                if 100.0*(coords(&(&arr[chunk[j] as usize] - &arr[chunk[k] as usize])))
                     .norm()    
                     >= divisor_r 
                 {
@@ -286,7 +293,7 @@ fn coords (point: &Vector6<FLO>) -> Vector4<FLO> {
     Vector4::from_vec(vec![point[0],point[1],point[3],point[4]])
 }
 
-fn define_f<'a>(arr_at_clique: &'a Vec<Vector6<FLO>>, mats: &'a Vec<Matrix4<FLO>>) 
+fn define_f<'a>(arr_at_clique: &'a Vec<Vector4<FLO>>, mats: &'a Vec<Matrix4<FLO>>) 
     -> Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a> {
     /*
     The code below is the rust equivalent of this python code:
@@ -304,20 +311,22 @@ fn define_f<'a>(arr_at_clique: &'a Vec<Vector6<FLO>>, mats: &'a Vec<Matrix4<FLO>
     */
     let projs = 
             arr_at_clique.into_iter()
-            .map(|arr| coords(&arr))
             .zip(mats)
             .map(|(arr,mat)| 
                 {move |y: Vector4<FLO>| (mat*y + arr,mu(&y, &arr))});
     let phis = projs.map(|func| {move |y: Vector4<FLO>| func(y).1*func(y).0 + (1.0-func(y).1)*y});
-    Box::new(move |y: Vector4<FLO>| phis.clone().fold(y, move|acc, phi| phi(acc)))
+    //phis.clone().fold(Vector4::from_vec(vec![58.0, 112.0, 166.0, 54.0]), move|acc, phi| {println!("{:?}",phi(acc)); phi(acc)});
+    phis.clone().fold(Vector4::from_vec(vec![138.0, 104.0, 71.0, 142.0]), move|acc, phi| {println!("{:?}",phi(acc)); phi(acc)});
+    Box::new(move |y: Vector4<FLO>| phis.clone().fold(y, move|acc, phi| {//print!("{}",phi(acc)); 
+    phi(acc)}))
 }
 
 fn check_r (max_clique: Vec<NAB>, points: &Vec<Vector6<FLO>>, r: FLO) {
     let mut counter = 0;
     let my_points: Vec<Vector6<FLO>> = points.into_iter().map(|p| p/r).collect();
     let points_q = max_clique.iter().map(|p| my_points[*p as usize]);
-    let mut x_ones = points_q.clone().map(|q| ball_rad_r(&q, &my_points,  1.0));
-    let mut projs = points_q.clone().map(|q| proj_from_normal(q));
+    let mut x_ones = points_q.clone().map(|q| ball_rad_r(&coords(&q), &my_points.iter().map(|q| coords(&q)).collect(),  1.0));
+    let mut projs = points_q.clone().map(|q| proj_from_normal(q*r));
     let mut max_ball = 0;
     let mut avg_ball = 0;
     for q in points_q {
@@ -328,7 +337,7 @@ fn check_r (max_clique: Vec<NAB>, points: &Vec<Vector6<FLO>>, r: FLO) {
         max_ball = max_ball.max(ball.len());
         //print!("{} ", ball.len());
         for w in ball {
-            max = max.max((coords(&(q+w))-proj*coords(&w)).norm());
+            max = max.max((&(coords(&q)+w)-proj*&w).norm());
         }
         //println!("dist {}", max);
         if max > DELTA*18.0 {
@@ -451,12 +460,15 @@ fn solve<'a>(points_at_clique: &Vec<Vector6<FLO>>, func: &'a Box<dyn Fn(Vector4<
     }    
 }
 
-fn lin_solve<'a>(points_at_clique: &Vec<Vector6<FLO>>, func: &'a Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a>, point_to_find: &Vector4<FLO>) {
+fn lin_solve<'a>(points_at_clique: &Vec<Vector4<FLO>>, func: &'a Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a>, point_to_find: &Vector4<FLO>) {
     let cost = FuncToMin {point_to_find, fun: func};
-    let mut best_point: Vector4<FLO> = coords(&points_at_clique[0]);
+    let mut best_point: Vector4<FLO> = points_at_clique[0];
+    println!("f(curr_point)={}", func(best_point));
+    println!("f(curr_point)={}", func(best_point/2000000.0));
+
     let mut best_val: FLO = 10e10;
-    for start in points_at_clique.into_iter().map(|q| coords(&q)) {
-        let mut cur_point = start;
+    for start in points_at_clique {
+        let mut cur_point = *start;
         //println!("f(curr_point)={}", func(cur_point));
         for i in 0..4 {
             let mut change: Vec<FLO> = vec![];
@@ -524,48 +536,47 @@ fn main() {
         println!("We are in non-chunking mode");
         chunk_size = len as NAB + 1;
     }
-    let max_clique = vec![654, 622, 606, 550, 481, 293, 199, 82, 183, 90, 155, 490, 110, 994, 120, 121, 990, 128, 129, 137, 138, 144, 145, 151, 102, 156, 161, 165, 169, 170, 93, 175, 179, 92, 184, 1014, 191, 192, 195, 85, 81, 200, 1018, 875, 218, 219, 76, 222, 225, 845, 232, 841, 73, 242, 243, 72, 1037, 253, 256, 262, 263, 1049, 68, 270, 271, 276, 277, 281, 1059, 285, 290, 294, 64, 299, 1168, 1222, 1355, 658, 655, 546, 649, 648, 646, 640, 1317, 636, 1307, 1303, 623, 618, 617, 612, 611, 605, 602, 599, 598, 595, 594, 585, 581, 580, 577, 576, 573, 572, 567, 566, 560, 1377, 1373, 549, 556, 107, 1226, 422, 423, 426, 427, 542, 538, 535, 534, 438, 441, 442, 531, 446, 447, 450, 451, 454, 455, 530, 460, 461, 466, 467, 472, 473, 476, 477, 480, 54, 484, 487, 48, 527, 491, 526, 496, 497, 502, 503, 504, 505, 510, 511, 519, 520, 1359, 513, 514, 44, 1365, 39, 38, 522, 523, 495, 494, 47, 51, 53, 58, 34, 59, 1369, 435, 434, 433, 541, 432, 543, 61, 1368, 416, 413, 412, 1376, 411, 410, 547, 557, 407, 559, 406, 403, 564, 565, 402, 1227, 1381, 1382, 397, 396, 393, 392, 1230, 1234, 1240, 1242, 584, 1248, 588, 589, 590, 591, 1249, 1252, 1256, 1269, 1260, 1264, 1268, 1272, 603, 1386, 1273, 1387, 1390, 1278, 1282, 615, 1394, 1283, 1285, 1288, 1398, 1289, 1291, 1402, 629, 630, 1294, 632, 1295, 1406, 635, 1299, 1311, 639, 1313, 641, 1321, 1412, 645, 1323, 1324, 1327, 1329, 1420, 1437, 1438, 1335, 1341, 661, 662, 1349, 665, 1351, 668, 669, 670, 671, 674, 675, 676, 321, 679, 680, 320, 319, 1218, 1211, 1210, 1206, 1202, 1198, 1194, 1191, 316, 1188, 1186, 313, 1181, 1180, 1178, 1177, 312, 1174, 1172, 1167, 718, 719, 309, 308, 1163, 1162, 1160, 1159, 239, 1154, 1152, 1151, 305, 304, 1147, 1146, 1143, 1142, 1140, 1361, 1135, 1134, 751, 1128, 756, 757, 1121, 1120, 1103, 1102, 1095, 1091, 1087, 1083, 1080, 1079, 301, 1076, 1075, 1069, 1068, 300, 1065, 1063, 298, 1060, 284, 791, 282, 1055, 1054, 1053, 1052, 799, 278, 67, 265, 1048, 264, 1045, 1044, 809, 1041, 257, 813, 817, 1036, 249, 821, 822, 248, 247, 826, 827, 246, 831, 1032, 833, 1031, 69, 1029, 837, 228, 238, 237, 842, 236, 231, 846, 229, 849, 1025, 1024, 853, 856, 857, 860, 861, 864, 865, 1022, 869, 871, 872, 109, 1021, 226, 215, 214, 211, 208, 881, 884, 885, 887, 888, 207, 1017, 891, 893, 894, 206, 77, 196, 899, 186, 901, 1013, 91, 906, 907, 178, 1010, 911, 1006, 172, 916, 917, 920, 921, 1003, 923, 162, 160, 928, 929, 930, 931, 100, 101, 934, 935, 938, 939, 152, 147, 942, 943, 949, 956, 957, 960, 961, 964, 966, 146, 969, 970, 974, 976, 977, 139, 980, 981, 984, 986, 131, 989, 130, 123, 122, 995, 115, 114, 998, 999, 1000, 362, 983, 946, 985, 936, 948, 971, 937, 973, 991, 950, 993, 975, 951, 952, 963, 953, 965, 944, 945, 900, 924, 922, 1005, 913, 1007, 1008, 1009, 912, 1011, 910, 908, 902, 794, 898, 896, 890, 880, 878, 876, 874, 868, 866, 852, 850, 848, 1028, 838, 1030, 836, 834, 832, 830, 828, 819, 818, 816, 814, 1040, 812, 1042, 1043, 810, 808, 806, 805, 804, 803, 802, 801, 800, 798, 796, 795, 772, 793, 1058, 792, 790, 788, 787, 786, 1064, 785, 1066, 784, 783, 782, 781, 1071, 1072, 1073, 1074, 780, 779, 778, 777, 776, 775, 1081, 774, 773, 1084, 702, 1086, 771, 1088, 770, 1090, 769, 1092, 768, 1094, 767, 1096, 766, 1098, 1099, 1100, 1101, 765, 764, 763, 762, 1106, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1115, 1116, 1117, 1118, 1119, 761, 760, 759, 758, 1124, 1125, 1126, 1127, 753, 1129, 752, 1131, 1132, 1133, 750, 748, 747, 746, 745, 1139, 744, 1141, 743, 742, 741, 740, 739, 738, 737, 736, 735, 734, 733, 732, 731, 1155, 730, 1157, 729, 728, 727, 726, 725, 724, 723, 722, 721, 720, 715, 714, 713, 1171, 712, 1173, 711, 1175, 710, 709, 708, 707, 706, 705, 704, 703, 647, 1185, 701, 1187, 700, 1189, 699, 698, 697, 696, 695, 1195, 1196, 1197, 694, 1199, 693, 1201, 692, 1203, 691, 1205, 690, 1207, 689, 1209, 688, 687, 686, 685, 1214, 1215, 1216, 1217, 684, 1219, 683, 1221, 682, 1223, 681, 388, 512, 417, 401, 1229, 400, 1231, 391, 1233, 390, 1235, 1236, 1237, 389, 1239, 345, 1241, 387, 1243, 386, 1245, 385, 384, 383, 382, 1250, 1251, 381, 1253, 380, 1255, 379, 1257, 378, 1259, 377, 1261, 376, 1263, 375, 1265, 1266, 1267, 374, 373, 372, 371, 370, 369, 1274, 1275, 368, 1277, 367, 1279, 366, 365, 364, 363, 1284, 0, 361, 360, 359, 358, 1290, 357, 356, 355, 354, 353, 1296, 1297, 1298, 352, 1300, 351, 1302, 350, 1304, 349, 1306, 348, 1308, 347, 1310, 346, 1312, 324, 1314, 344, 1316, 343, 1318, 342, 1320, 341, 340, 339, 338, 337, 1326, 336, 1328, 335, 1330, 334, 1332, 333, 1334, 332, 1336, 1337, 1338, 331, 1340, 330, 1342, 1343, 1344, 1345, 1346, 329, 1348, 328, 1350, 327, 1352, 326, 1354, 325, 1356, 209, 1358, 1, 1360, 45, 1362, 43, 1364, 42, 1366, 1367, 37, 35, 33, 32, 1372, 31, 30, 29, 28, 27, 1378, 26, 1380, 25, 24, 1383, 23, 22, 21, 20, 19, 1389, 18, 1391, 17, 1393, 16, 1395, 15, 1397, 14, 1399, 13, 1401, 12, 1403, 11, 1405, 10, 1407, 1408, 1409, 9, 1411, 8, 1413, 1414, 1415, 1416, 1417, 7, 1419, 6, 1421, 1422, 1423, 1424, 1425, 1426, 1427, 1428, 1429, 1430, 1431, 1432, 1433, 1434, 1435, 5, 4, 3, 2, 289];
-    
-    
-    //chunk_clique(chunk_size, &(0..(len as NAB)).collect::<Vec<NAB>>(), &arr, divisor_r, 2);
+    let max_clique = //vec![[756, 530, 1439, 1342, 551, 1410, 603, 492, 1389, 580, 1106, 1045, 2, 798, 686, 1058, 27, 410, 351, 1143, 1175, 313, 840, 981, 77, 657, 1207, 1210, 252, 845, 1312, 280, 629, 216, 129, 953, 464, 817, 1248, 438, 899, 868, 873, 159, 381, 352, 103, 1182, 927, 1278, 185, 186, 1263, 894, 32, 223, 1289, 1158, 162, 1313, 932, 956, 1365, 247, 604, 783, 134, 986, 1032, 513, 1134, 1008, 491, 269, 112, 626, 403, 54, 291, 74, 423, 332, 646, 310, 763, 687, 1114, 669, 742, 1095, 1075, 713, 1337, 1339, 451, 449, 711, 1079, 1235]67, 1102, 370, 1098, 374, 1094, 33, 37, 41, 1072, 45, 1062, 394, 1059, 1058, 398, 402, 1055, 406, 1054, 1051, 1047, 416, 1043, 420, 1039, 49, 1027, 430, 1023, 1019, 1015, 1011, 1007, 997, 993, 883, 882, 871, 870, 867, 866, 535, 546, 547, 856, 855, 558, 559, 562, 563, 566, 567, 852, 851, 848, 578, 579, 847, 844, 843, 589, 840, 839, 599, 836, 835, 832, 831, 828, 827, 824, 823, 820, 819, 816, 633, 815, 812, 811, 808, 807, 804, 800, 796, 661, 792, 664, 788, 778, 774, 770, 678, 766, 682, 762, 686, 758, 690, 1178, 694, 753, 53, 698, 749, 702, 743, 706, 731, 727, 710, 63, 714, 1259, 717, 657, 720, 62, 77, 5, 1434, 78, 79, 1430, 59, 7, 58, 57, 738, 1428, 82, 85, 705, 1424, 1420, 54, 88, 1418, 1417, 697, 89, 242, 1415, 92, 759, 687, 763, 93, 94, 1411, 681, 95, 1409, 98, 773, 99, 1405, 674, 101, 781, 782, 784, 785, 1401, 670, 668, 667, 791, 793, 663, 660, 588, 797, 656, 104, 801, 803, 653, 105, 650, 647, 646, 645, 1397, 639, 638, 637, 636, 630, 629, 627, 107, 624, 621, 620, 619, 616, 613, 612, 611, 610, 605, 604, 603, 600, 598, 595, 594, 593, 590, 493, 585, 584, 583, 582, 574, 573, 1393, 571, 570, 553, 552, 551, 550, 541, 540, 860, 861, 862, 863, 539, 536, 534, 531, 530, 529, 528, 523, 522, 1, 520, 876, 877, 878, 879, 517, 516, 515, 514, 511, 886, 887, 889, 890, 510, 509, 894, 895, 896, 897, 508, 505, 504, 503, 902, 903, 904, 905, 502, 499, 908, 909, 910, 911, 498, 497, 914, 915, 917, 918, 496, 1391, 921, 922, 923, 492, 926, 927, 928, 929, 491, 490, 932, 933, 934, 935, 487, 486, 938, 939, 940, 941, 485, 484, 944, 945, 947, 948, 481, 108, 951, 952, 953, 480, 479, 956, 957, 958, 959, 478, 475, 962, 963, 964, 965, 474, 473, 472, 469, 970, 971, 972, 973, 468, 466, 465, 978, 979, 111, 981, 982, 462, 461, 986, 987, 988, 989, 460, 113, 1385, 456, 994, 455, 454, 998, 451, 114, 1001, 1003, 1004, 450, 1383, 449, 448, 1010, 443, 1012, 442, 440, 1016, 439, 117, 436, 1022, 1024, 434, 433, 429, 1028, 120, 1030, 46, 426, 1377, 1034, 50, 424, 1038, 121, 1042, 419, 1375, 417, 1048, 122, 1050, 412, 410, 123, 407, 403, 126, 397, 393, 391, 1063, 69, 127, 128, 1369, 1069, 71, 129, 385, 1367, 132, 133, 134, 135, 138, 1361, 139, 1358, 381, 1356, 1355, 1353, 380, 141, 144, 378, 145, 377, 1347, 373, 1101, 1346, 32, 1345, 369, 1344, 147, 1110, 150, 151, 1113, 1339, 360, 152, 358, 1336, 352, 1122, 349, 1334, 1125, 1127, 1128, 348, 347, 153, 1134, 1331, 1330, 1328, 1327, 1140, 156, 157, 1143, 1144, 1145, 334, 1148, 1150, 332, 28, 158, 26, 1158, 1323, 1322, 1163, 1164, 1165, 324, 1321, 318, 1320, 314, 310, 309, 159, 307, 162, 304, 301, 1317, 1316, 296, 1182, 208, 1184, 294, 293, 1188, 289, 1190, 1314, 286, 284, 283, 277, 276, 275, 274, 269, 268, 1202, 74, 1204, 266, 265, 261, 260, 1311, 258, 1212, 1213, 1214, 1215, 255, 1310, 252, 1309, 250, 247, 1308, 244, 755, 241, 239, 235, 234, 233, 1232, 1233, 1234, 1235, 232, 229, 225, 224, 1242, 1243, 1244, 1245, 221, 220, 219, 218, 211, 1252, 1253, 1254, 1255, 210, 209, 1258, 66, 1260, 1261, 163, 201, 200, 199, 1266, 1267, 1268, 1269, 198, 185, 1272, 1273, 1274, 1275, 184, 183, 1278, 1279, 1280, 1281, 182, 175, 1284, 1285, 1286, 1287, 174, 173, 1290, 1291, 1292, 1293, 172, 167, 1296, 1297, 1298, 166, 1301, 1302, 1305, 1304, 1065, 328, 164, 245, 251, 253, 259, 267, 285, 287, 1315, 297, 299, 306, 308, 316, 322, 1162, 1160, 401, 1142, 338, 340, 342, 1329, 1303, 344, 346, 1130, 1124, 1335, 1118, 1337, 1116, 1114, 1112, 1111, 1109, 68, 1107, 1105, 1103, 1097, 146, 1095, 1093, 1091, 1089, 1087, 140, 36, 1085, 1083, 38, 1359, 1081, 1079, 40, 1077, 72, 1075, 42, 1073, 1071, 44, 70, 1136, 165, 671, 413, 1044, 423, 425, 427, 435, 437, 1018, 116, 1006, 1000, 457, 411, 463, 980, 110, 950, 920, 521, 572, 626, 628, 642, 644, 652, 654, 655, 409, 783, 673, 777, 775, 100, 675, 677, 679, 769, 767, 765, 685, 691, 693, 695, 750, 701, 748, 746, 87, 703, 86, 744, 742, 84, 740, 56, 734, 732, 730, 728, 709, 726, 711, 724, 722, 713, 715, 1159];
+    chunk_clique(chunk_size, &(0..(len as NAB)).collect::<Vec<NAB>>(), &arr, divisor_r, 2);
 
     println!("Found max clique of len {}: {:?}", max_clique.len(), max_clique);
 
-
     let now2 = std::time::Instant::now();
     let vals = get_qs(max_clique.clone(), &arr);
-    for point in &vals.0 {
-        let normal: Vector4<FLO> = Vector4::from_vec(vec![FLO::cos(point[2]/180.0*PI),FLO::sin(point[2]/190.0*PI),-FLO::cos(point[5]/180.0*PI),-FLO::sin(point[5]/180.0*PI)]);
-        println!("normal: {}", normal);
-    }
+
+    // for ma in &vals.1 {
+    //     println!("{}", ma[(0,0)]);
+    // }
+    println!("{:?} {:?}", &vals.0[0], &vals.0[40]);
+
     let elapsed_time2 = now2.elapsed();
     println!("It took {} micro seconds to calc {} qr decomps", elapsed_time2.as_micros(), vals.0.len());
-    let start = coords(&vals.0[9].clone()); //4
-    let point_to_find = coords(&vals.0[21].clone());//8
+    //let start = &vals.0[9].clone(); //4
+    let point_to_find = &vals.0[21].clone();//8
 
     let func = define_f(&vals.0, &vals.1);
-
-    let cost = FuncToMin {point_to_find: &point_to_find, fun: &func};
+    println!("{}", func(*point_to_find));
+    // let cost = FuncToMin {point_to_find: &point_to_find, fun: &func};
     
-    println!("{}", &cost.norm_func(&start));
+    // println!("{}", &cost.norm_func(&start));
 
-    let root_drawing_area = BitMapBackend::new("/home/leo/Documents/work/WFtranslator/feffer/images/0.1.png", (1024, 768))
-    .into_drawing_area();
+    // let root_drawing_area = BitMapBackend::new("/home/leo/Documents/work/WFtranslator/feffer/images/0.1.png", (1024, 768))
+    // .into_drawing_area();
 
-    root_drawing_area.fill(&WHITE).unwrap();
+    // root_drawing_area.fill(&WHITE).unwrap();
 
-    let mut chart = ChartBuilder::on(&root_drawing_area)
-        .build_cartesian_2d(-DELTA*10000.0..DELTA*10000.0, (cost.norm_func(&start)-0.1)..(cost.norm_func(&start)+0.1))
-        .unwrap();
+    // let mut chart = ChartBuilder::on(&root_drawing_area)
+    //     .build_cartesian_2d(-DELTA*10000.0..DELTA*10000.0, (cost.norm_func(&start)-0.1)..(cost.norm_func(&start)+0.1))
+    //     .unwrap();
 
-    chart.draw_series(LineSeries::new(
-        (-(f64::ceil(DELTA*1000.0) as i32)..(f64::ceil(DELTA*1000.0) as i32)).map(|x| x as f64 * 1000.0).map(|x| (x, cost.norm_func(&(start + Vector4::from_vec(vec![0.0,x,0.0,0.0]))))),
-        &RED
-    )).unwrap();
-    check_r(max_clique, &arr, divisor_r);
+    // chart.draw_series(LineSeries::new(
+    //     (-(f64::ceil(DELTA*1000.0) as i32)..(f64::ceil(DELTA*1000.0) as i32)).map(|x| x as f64 * 1000.0).map(|x| (x, cost.norm_func(&(start + Vector4::from_vec(vec![0.0,x,0.0,0.0]))))),
+    //     &RED
+    // )).unwrap();
+    //check_r(max_clique, &arr, divisor_r);
 
     //lin_solve(&vals.0, &func, &point_to_find);
-    println!("point to find: {}",point_to_find);
+    //println!("point to find: {}",point_to_find);
 
     //solve(&vals.0, &func, &point_to_find);
     //let point_to_find: Vector4<FLO> = Vector4::from_vec(vec![0.04,1.0,32.0,1.0]);

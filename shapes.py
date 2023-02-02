@@ -628,23 +628,23 @@ def generateWFData(amount = 100, N=201):
     WFData = []
     for counter in range(amount):
         print(counter)
-        if counter > amount//2:
-            randSize = np.random.randint(2, 4)
-            shape = generatePolygon(randSize)
-            WFSetList = polygonToWFsetList(shape, gridSize=N, angleAccuracy=360)
-        else:
-            shape = genEll()
-            WFSetList = ellipseToWFsetList(shape, gridSize=N, angleAccuracy=360)
+        # if counter > amount//2:
+        #     randSize = np.random.randint(2, 4)
+        #     shape = generatePolygon(randSize)
+        #     WFSetList = polygonToWFsetList(shape, gridSize=N, angleAccuracy=360)
+        # else:
+        shape = genEll()
+        WFSetList = ellipseToWFsetList(shape, gridSize=N, angleAccuracy=360)
         WF = dim3WFList(WFSetList)
         SinoWF = dim3getSinoWFFromList(WFSetList, N=N)
         arr = [np.concatenate(np.array([SinoWF[j], WF[j]])) for j in range(len(WF))]
         WFData.extend(arr)
     return np.array(WFData)
 
-seed = 70
+seed = 73
 np.random.seed(seed)
 
-amount = 100
+amount = 2
 
 data = generateWFData(amount=amount)
 np.savetxt(f"Heu{amount}_{seed}.txt", data, delimiter=' ', newline='\n', fmt='%d')
