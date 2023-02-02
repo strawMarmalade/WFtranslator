@@ -15,7 +15,7 @@ rayon = "1.6.1"
 parking_lot = "0.12.1"
 #ndarray-linalg = { version = "0.16.0", features = ["openblas-static"] }
 nalgebra = "0.32.1"
-argmin = {version = "0.8.0", features = ["full"]}
+argmin = {version = "0.8.0"} #features = ["full"]
 argmin-math = { version = "0.3.0", features = ["nalgebra_latest-serde"]}
 #nshare = "0.9.0"
 finitediff = { version = "0.1.4", features = ["ndarray"] }
