@@ -1,1 +1,12 @@
 feffer/target
+output*.txt
+quick-cliques
+pmc*
+feffer/matrix*
+feffer/max-clique
+feffer/dataMat*
+Heu*.txt
+Full*.txt
+.ipynb_checkpoints
+__pycache__
+feffer/images

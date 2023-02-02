@@ -588,7 +588,7 @@ fn main() {
     // lin_solve(&vals.0, &func, &point_to_find);
     // println!("point to find: {}",point_to_find);
 
-    solve(&vals.0, &func, &point_to_find, divisor_r);
+    solve(&vals.0, &func, &point_to_find, divisor_r); 
     //let point_to_find: Vector4<FLO> = Vector4::from_vec(vec![0.04,1.0,32.0,1.0]);
     //println!("{}", func(start));
  
