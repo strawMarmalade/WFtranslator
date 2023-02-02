@@ -34,7 +34,7 @@ use crate::pmcgraph::PmcGraph;
 
 type NAB = u32;
 type FLO = f64;
-const DELTA: FLO = 200.0*0.016; //want C_{18}n\delta < C_{18}n 1/(n*20) = 6/20 
+const DELTA: FLO = 2000.0*0.016; //want C_{18}n\delta < C_{18}n 1/(n*20) = 6/20 
 //const DIV: FLO = 1.0;//1.0;
 
 fn mu(x_point: &Vector4<FLO>, q_point: &Vector4<FLO>) -> FLO {
@@ -104,7 +104,6 @@ fn find_disc(x0_point: &Vector6<FLO>, x_vals: &Vec<Vector6<FLO>>, n: usize) -> O
 //     // output
 //     points.clone().into_iter().filter(|x| (x_point-*x).norm() <= 1.0).collect()
 // }
-
 
 fn ball_rad_r(x_point: &Vector6<FLO>, points: &Vec<Vector6<FLO>>, r: FLO) -> Vec<Vector6<FLO>> {
     points.clone()
@@ -210,7 +209,8 @@ fn get_qs(max_clique: Vec<NAB>, points: &Vec<Vector6<FLO>>) -> (Vec<Vector6<FLO>
 }
 
 fn proj_from_normal(point: Vector6<FLO>) -> Matrix4<FLO>{
-    let normal: Vector4<FLO> = Vector4::from_vec(vec![FLO::cos(point[5]/180.0*PI),FLO::sin(point[5]/180.0*PI),FLO::cos(point[2]/180.0*PI),FLO::sin(point[2]/180.0*PI)]);
+    let normal: Vector4<FLO> = Vector4::from_vec(vec![FLO::cos(point[2]/180.0*PI),FLO::sin(point[2]/190.0*PI),-FLO::cos(point[5]/180.0*PI),-FLO::sin(point[5]/180.0*PI)]);
+    println!("normal: {}", normal);
     let mat: Matrix4x3<FLO> = Matrix4x3::new(
         -normal[1],-normal[2],-normal[3],
         normal[0],normal[3],-normal[2],
@@ -336,10 +336,10 @@ fn check_r (max_clique: Vec<NAB>, points: &Vec<Vector6<FLO>>, r: FLO) {
             counter+=1;
         }
     }
-    println!("Avg ball: {}", (avg_ball as f32)/(max_clique.len() as f32));
-    println!("max ball {}", max_ball);
-    println!("counter: {}", counter);
-    println!("clique length: {}", max_clique.len());
+    println!("Avg points in ball: {}", (avg_ball as f32)/(max_clique.len() as f32));
+    println!("Max points in ball: {}", max_ball);
+    println!("#Times we're too far away: {}", counter);
+    println!("Clique length: {}", max_clique.len());
     //let max_dists = x_ones.zip(projs).zip(points_q).map(|(wp,q)| wp.0.iter().map(|w| coords(&w)-wp.1*coords(&w) + coords(&q)));
 }
 
@@ -451,6 +451,44 @@ fn solve<'a>(points_at_clique: &Vec<Vector6<FLO>>, func: &'a Box<dyn Fn(Vector4<
     }    
 }
 
+fn lin_solve<'a>(points_at_clique: &Vec<Vector6<FLO>>, func: &'a Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a>, point_to_find: &Vector4<FLO>) {
+    let cost = FuncToMin {point_to_find, fun: func};
+    let mut best_point: Vector4<FLO> = coords(&points_at_clique[0]);
+    let mut best_val: FLO = 10e10;
+    for start in points_at_clique.into_iter().map(|q| coords(&q)) {
+        let mut cur_point = start;
+        //println!("f(curr_point)={}", func(cur_point));
+        for i in 0..4 {
+            let mut change: Vec<FLO> = vec![];
+            for j in 0..4 {
+                if j == i {
+                    change.push(DELTA);
+                }
+                else {
+                    change.push(0.0);
+                }
+            }
+            let change_vec = Vector4::from_vec(change);
+            if func(change_vec) < func(cur_point) {
+                cur_point += change_vec;
+            }
+            else {
+                cur_point -= change_vec;
+
+            }
+        }
+        //println!("{}", cost.norm_func(&start));
+        if cost.norm_func(&cur_point) < best_val {
+            best_point = cur_point;
+            best_val = cost.norm_func(&cur_point);
+            println!("{}", best_val);
+
+        }
+        //println!("{}", &cost.norm_func(&(start + Vector4::from_vec(vec![DELTA/2.0,DELTA/2.0,DELTA/2.0,DELTA/2.0]))));
+    }   
+    println!("best val {} and best point: {:?}", best_val, best_point);
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let mut chunk_size: NAB = 0;
@@ -493,12 +531,17 @@ fn main() {
 
     println!("Found max clique of len {}: {:?}", max_clique.len(), max_clique);
 
+
     let now2 = std::time::Instant::now();
     let vals = get_qs(max_clique.clone(), &arr);
+    for point in &vals.0 {
+        let normal: Vector4<FLO> = Vector4::from_vec(vec![FLO::cos(point[2]/180.0*PI),FLO::sin(point[2]/190.0*PI),-FLO::cos(point[5]/180.0*PI),-FLO::sin(point[5]/180.0*PI)]);
+        println!("normal: {}", normal);
+    }
     let elapsed_time2 = now2.elapsed();
     println!("It took {} micro seconds to calc {} qr decomps", elapsed_time2.as_micros(), vals.0.len());
-    let start = coords(&vals.0[8].clone()); //4
-    let point_to_find = coords(&vals.0[8].clone());//8
+    let start = coords(&vals.0[9].clone()); //4
+    let point_to_find = coords(&vals.0[21].clone());//8
 
     let func = define_f(&vals.0, &vals.1);
 
@@ -506,28 +549,30 @@ fn main() {
     
     println!("{}", &cost.norm_func(&start));
 
-    let root_drawing_area = BitMapBackend::new("/home/leo/Documents/work/WFtranslator/feffer/images/0.6.png", (1024, 768))
+    let root_drawing_area = BitMapBackend::new("/home/leo/Documents/work/WFtranslator/feffer/images/0.1.png", (1024, 768))
     .into_drawing_area();
 
     root_drawing_area.fill(&WHITE).unwrap();
 
     let mut chart = ChartBuilder::on(&root_drawing_area)
-        .build_cartesian_2d(-DELTA*100.0..DELTA*100.0, (cost.norm_func(&start)-0.01)..(cost.norm_func(&start)+0.01))
+        .build_cartesian_2d(-DELTA*10000.0..DELTA*10000.0, (cost.norm_func(&start)-0.1)..(cost.norm_func(&start)+0.1))
         .unwrap();
 
     chart.draw_series(LineSeries::new(
-        (-(f64::ceil(DELTA*100.0) as i32)..(f64::ceil(DELTA*100.0) as i32)).map(|x| x as f64 / 1.0).map(|x| (x, cost.norm_func(&(start + Vector4::from_vec(vec![x,0.0,0.0,0.0]))))),
+        (-(f64::ceil(DELTA*1000.0) as i32)..(f64::ceil(DELTA*1000.0) as i32)).map(|x| x as f64 * 1000.0).map(|x| (x, cost.norm_func(&(start + Vector4::from_vec(vec![0.0,x,0.0,0.0]))))),
         &RED
     )).unwrap();
+    check_r(max_clique, &arr, divisor_r);
 
+    //lin_solve(&vals.0, &func, &point_to_find);
+    println!("point to find: {}",point_to_find);
 
     //solve(&vals.0, &func, &point_to_find);
     //let point_to_find: Vector4<FLO> = Vector4::from_vec(vec![0.04,1.0,32.0,1.0]);
-    println!("{}", func(start));
+    //println!("{}", func(start));
 
     
 
-    check_r(max_clique, &arr, divisor_r);
 
 
     
