@@ -1,16 +1,19 @@
-use argmin::core::{CostFunction, Error, Gradient, Executor, State, Hessian};
+use argmin::core::{CostFunction, Error, Gradient, Executor, State, Hessian, IterState, Problem};
+use argmin::solver::linesearch::condition::ArmijoCondition;
+use argmin::solver::linesearch::{MoreThuenteLineSearch, BacktrackingLineSearch};
+use argmin::solver::quasinewton::{BFGS, SR1TrustRegion};
 //use plotters::prelude::*;
-use argmin::solver::trustregion::TrustRegion;
+use argmin::solver::trustregion::{TrustRegion, CauchyPoint};
 use na::{Vector6, Vector4, Matrix4};
 use finitediff::FiniteDiff;
 use rayon::prelude::*;
+use argmin::core::Solver;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::{Receiver, Sender};
 use nalgebra as na;
-use ndarray::Array1;
+use ndarray::{Array1, Array2};
 use std::env;
 use std::f64::consts::PI;
-
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
@@ -508,18 +511,32 @@ fn solve<'a>(points_at_clique: &Vec<Vector4<FLO>>, func: &'a Box<dyn Fn(Vector4<
 
 fn match_to_input<'a>(points_at_clique: &Vec<Vector4<FLO>>, func: &'a Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a + Sync>, point_to_find: &Vector4<FLO>, divisor_r: FLO) 
 -> FLO {
-    let cost = FindingR {point_to_find, fun: func};
-
     let mut best_val: FLO = 10e10;
+    let mut best_param: Vector4<FLO> = Vector4::from_vec(vec![0.0,0.0,0.0,0.0]);
 
-    for start in points_at_clique {    
-        let cp = argmin::solver::trustregion::CauchyPoint::new();
-        let tr = TrustRegion::new(cp).with_max_radius(DELTA*divisor_r).unwrap().with_radius(divisor_r*DELTA/10.0).unwrap();
+    for start in points_at_clique {
+        let star = Array1::from_vec(vec![start[0],start[1],start[2],start[3]]);
+        let cost = FindingR {point_to_find, fun: func};
 
-        let res = Executor::new(cost.clone(), tr)
+
+        let linesearch: BacktrackingLineSearch<Array1<FLO>, Array1<FLO>,_, FLO> = BacktrackingLineSearch::new(ArmijoCondition::new(0.0001f64).unwrap());
+            //.with_bounds(divisor_r*DELTA/500.0,divisor_r*DELTA/10.0).unwrap();
+        let cp: BFGS<_, FLO> = argmin::solver::quasinewton::BFGS::new(linesearch);
+        let inv_hessian: Array2<FLO> = Array2::eye(4);
+        //let state = IterState::new()
+        // .param(star)
+        // .inv_hessian(inv_hessian);
+        // //let tr = TrustRegion::new(cp).with_max_radius(divisor_r*DELTA).unwrap().with_radius(divisor_r*DELTA/100.0).unwrap();
+        // let (mut state_out, kv) = cp.init(&mut Problem::new(cost), state).unwrap();
+        // let cp: CauchyPoint<FLO> = argmin::solver::trustregion::CauchyPoint::new();
+
+
+        // let sr1: SR1TrustRegion<_, f64> = SR1TrustRegion::new(cp).with_radius(divisor_r*DELTA/100.0);
+        let res = Executor::new(cost,  cp)
         .configure(|state|
             state
-                .param(*start)
+                .param(star)
+                .inv_hessian(inv_hessian)
                 .max_iters(5)
         )
         // run the solver on the defined problem
@@ -527,8 +544,30 @@ fn match_to_input<'a>(points_at_clique: &Vec<Vector4<FLO>>, func: &'a Box<dyn Fn
         let best_res = res.state().best_cost;
         if best_res < best_val {
             best_val = best_res;
+            best_param = Vector4::from_column_slice(res.state().best_param.as_ref().unwrap().as_slice().unwrap());
         }
     }
+    //     let cost = FindingR {point_to_find, fun: func};
+
+    // for start in points_at_clique {
+
+    //     let cp = argmin::solver::trustregion::CauchyPoint::new();
+    //     let tr = TrustRegion::new(cp).with_max_radius(divisor_r*DELTA).unwrap().with_radius(divisor_r*DELTA/100.0).unwrap();
+    //     let res = Executor::new(cost, tr)
+    //     .configure(|state|
+    //         state
+    //             .param(*start)
+    //             .max_iters(30)
+    //     )
+    //     // run the solver on the defined problem
+    //     .run().unwrap();
+    //     let best_res = res.state().best_cost;
+    //     if best_res < best_val {
+    //         best_val = best_res;
+    //         best_param = res.state().best_param.unwrap();
+    //     }
+    // }
+    // println!("When trying to find {}, we instead found {}", point_to_find, best_param);
     best_val
 }
 
@@ -546,57 +585,58 @@ impl FindingR<'_> {
         // )
         //((self.fun)(*p) - self.point_to_find).norm()
     }
-    fn array_norm_func(&self, y: Array1<FLO>) -> FLO {
+    fn array_norm_func(&self, y: &Array1<FLO>) -> FLO {
         self.norm_func(&Vector4::from_column_slice(y.as_slice().unwrap()))
     }
-    fn array_gradient(&self, y: Array1<FLO>) -> Vector4<FLO> {
-        self.gradient(&Vector4::from_column_slice(y.as_slice().unwrap())).unwrap()
-    }
+    // fn array_gradient(&self, y: &Array1<FLO>) -> Array1<FLO> {
+    //     self.gradient(&Vector4::from_column_slice(y.as_slice().unwrap())).unwrap()
+    // }
 }
 
 impl CostFunction for FindingR<'_> {
     /// Type of the parameter vector
-    type Param = Vector4<FLO>;
+    type Param = Array1<FLO>;
     /// Type of the return value computed by the cost function
     type Output = FLO;
     /// Apply the cost function to a parameter `p`
     fn cost(&self, p: &Self::Param) -> Result<Self::Output, Error> {
         //print!("{} ", self.norm_func(p));
-        Ok(self.norm_func(p))
+        Ok(self.array_norm_func(p))
     }
 }
 
 impl Gradient for FindingR<'_> {
     /// Type of the parameter vector
-    type Param = Vector4<FLO>;
+    type Param = Array1<FLO>;
     /// Type of the gradient
-    type Gradient = Vector4<FLO>;
+    type Gradient = Array1<FLO>;
     /// Compute the gradient at parameter `p`.
     fn gradient(&self, p: &Self::Param) -> Result<Self::Gradient, Error> {            
-        let grad = FiniteDiff::forward_diff(&Array1::from_vec(vec![p[0],p[1],p[2],p[3]]), &{|x| self.array_norm_func(x.clone()) });
+        let grad = FiniteDiff::forward_diff(p, &{|x| self.array_norm_func(x)});
         //println!("{}", grad);
-        Ok(Vector4::from_column_slice(grad.as_slice().unwrap()))
+        Ok(grad)
+        //Ok(Vector4::from_column_slice(grad.as_slice().unwrap()))
     }
 }
 
 impl Hessian for FindingR<'_> {
-    type Param = Vector4<FLO>;
+    type Param = Array1<FLO>;
     /// Type of the gradient
-    type Hessian = Matrix4<FLO>;
+    type Hessian = Array2<FLO>;
 
     /// Compute gradient of rosenbrock function
     fn hessian(&self, p: &Self::Param) -> Result<Self::Hessian, Error> {
         //let func2 = {|y: &Array1<FLO>| self.norm_func(Vector4::from_column_slice(y.as_slice().unwrap()))};
-        let grad = FiniteDiff::forward_hessian(&Array1::from_vec(vec![p[0],p[1],p[2],p[3]]), &{|x| Array1::from_iter(self.array_gradient(x.clone()).iter().map(|a| *a))});//self.array_norm_func(x.clone()) });
+        let grad = FiniteDiff::forward_hessian(p, &{|x| self.gradient(x).unwrap()});//self.array_norm_func(x.clone()) });
         //let grad = FiniteDiff::forward_hessian_nograd(&y, &func2);
         //println!("{}", grad);
-
-        Ok(Matrix4::new(
-            grad[(0,0)], grad[(0,1)], grad[(0,2)],grad[(0,3)],
-            grad[(1,0)], grad[(1,1)], grad[(1,2)],grad[(1,3)],
-            grad[(2,0)], grad[(2,1)], grad[(2,2)],grad[(2,3)],
-            grad[(3,0)], grad[(3,1)], grad[(3,2)],grad[(3,3)],
-        ))
+        Ok(grad)
+        // Ok(Matrix4::new(
+        //     grad[(0,0)], grad[(0,1)], grad[(0,2)],grad[(0,3)],
+        //     grad[(1,0)], grad[(1,1)], grad[(1,2)],grad[(1,3)],
+        //     grad[(2,0)], grad[(2,1)], grad[(2,2)],grad[(2,3)],
+        //     grad[(3,0)], grad[(3,1)], grad[(3,2)],grad[(3,3)],
+        // ))
         //Ok(Matrix4::from_column_slice(grad.as_slice().unwrap()))
         //Ok(rosenbrock_2d_hessian(param, 1.0, 100.0))
     }
@@ -607,6 +647,7 @@ fn error_in_f(chunk_size: NAB, len: usize, divisor_r: FLO, arr: &Vec<Vector6<FLO
     let (sender_glo, receiver): (Sender<FLO>, Receiver<FLO>) = channel();
     let max_clique = chunk_clique(chunk_size, &(0..(len as NAB)).collect::<Vec<NAB>>(), arr, divisor_r, 2);
     let vals = get_qs(max_clique.clone(), &arr);
+    // vals.0 = vals.0.iter().map(|v| v/divisor_r).collect();
     let func = define_f(&vals.0, &vals.1, &divisor_r);
     arr.into_par_iter().skip(len-1000).for_each_with(sender_glo,|sender, p| {
         sender.send(match_to_input(&vals.0, &func, &coords(&p), divisor_r)).unwrap();
