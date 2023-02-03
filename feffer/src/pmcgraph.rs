@@ -1,10 +1,10 @@
 /*
-This code is based on https://github.com/ryanrossi/pmc and has just been 
+This code is based on https://github.com/ryanrossi/pmc and has just been
 reimplemented in rust
 */
-use std::collections::{HashMap};
 use parking_lot::RwLock;
 use rayon::prelude::*;
+use std::collections::HashMap;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -38,8 +38,8 @@ pub struct PmcGraph {
 
 impl PmcGraph {
     pub fn new(verts: Vec<Nab>, edgs: Vec<(Nab, Nab)>) -> PmcGraph {
-        let mut vertices: Vec<usize> = Vec::with_capacity(verts.len()+1);
-        let mut edges: Vec<Nab> = Vec::with_capacity(edgs.len()*2);
+        let mut vertices: Vec<usize> = Vec::with_capacity(verts.len() + 1);
+        let mut edges: Vec<Nab> = Vec::with_capacity(edgs.len() * 2);
         //let mut vert_list: AdjMtx = AdjMtx::new();
         //let mut current_start_vert: NAB = edgs[0].0;
         let mut now: std::time::Instant = std::time::Instant::now();
@@ -50,15 +50,15 @@ impl PmcGraph {
         let mut vert_enum = verts
             .into_iter()
             .zip(0..(vertlen as Nab))
-            .map(|p| (p.0,(p.1, vec![])))
-            .collect::<HashMap<Nab,(Nab,Vec<Nab>)>>();        
+            .map(|p| (p.0, (p.1, vec![])))
+            .collect::<HashMap<Nab, (Nab, Vec<Nab>)>>();
 
         for e in edgs.into_iter() {
             let val1 = vert_enum.get(&e.1).unwrap().0;
             let val0 = vert_enum.get_mut(&e.0).unwrap();
 
             val0.1.push(val1);
-            
+
             let val00 = val0.0;
 
             let val11 = vert_enum.get_mut(&e.1).unwrap();
@@ -72,10 +72,10 @@ impl PmcGraph {
             vertices.push(edges.len());
         }
         let mut elapsed_time = now.elapsed();
-        println!(
-            "\tBuilding the graph struct from input took {} milliseconds.",
-            elapsed_time.as_millis()
-        );
+        // println!(
+        //     "\tBuilding the graph struct from input took {} milliseconds.",
+        //     elapsed_time.as_millis()
+        // );
         let n = vertices.len();
         let mut g = PmcGraph {
             vertices,
@@ -92,10 +92,10 @@ impl PmcGraph {
         now = std::time::Instant::now();
         g.compute_cores();
         elapsed_time = now.elapsed();
-        println!(
-            "\tComputing cores took {} milliseconds.",
-            elapsed_time.as_millis()
-        );
+        // println!(
+        //     "\tComputing cores took {} milliseconds.",
+        //     elapsed_time.as_millis()
+        // );
         g
     }
     pub fn vertex_degrees(&mut self) {
@@ -229,7 +229,6 @@ impl PmcGraph {
                 let v = *w;
                 let mut pairs: Vec<(Nab,Nab)> = vec![];
                 let mut clique: Vec<Nab> = vec![];
-                
                 let mc = *mc_glo.read();
                 if kcores[v as usize] > mc {
                     for j in verts[v as usize]..verts[v as usize + 1] {
@@ -278,7 +277,7 @@ impl PmcGraph {
                     let mut _found_ub_mut = *found_ub_glo.write();
                     _found_ub_mut = true;
                 }
-                println!("\tFound clique of len {}", c_max.len());
+                //println!("\tFound clique of len {}", c_max.len());
             }
             drop(results);
         }
@@ -291,7 +290,6 @@ impl PmcGraph {
             let verts = &self.vertices;
             let edgs = &self.edges;
             let kcores = &self.kcore;
-            
 
             // for j in verts[u as usize]..verts[u as usize +1] {
             //     ind[edgs[j as usize] as usize] = true;
@@ -308,8 +306,7 @@ impl PmcGraph {
             //     ind[edgs[j as usize] as usize] = false;
             // }
 
-            
-            /* 
+            /*
             A functional way to do the below imperative thing. It's slower,
             but I think more memory efficient.
             //let ind = (verts[u as usize]..verts[u as usize + 1]).map(|j| edgs[j]);
@@ -319,7 +316,6 @@ impl PmcGraph {
                 .map(|i| pairs[i].clone())
                 .collect();
             */
-
 
             let mut ind: Vec<bool> = vec![false; verts.len() - 1];
             for j in verts[u as usize]..verts[u as usize + 1] {

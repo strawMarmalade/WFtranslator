@@ -1,18 +1,18 @@
+use argmin::core::{CostFunction, Error, Executor, Gradient, Hessian, State};
 use argmin::solver::quasinewton::SR1TrustRegion;
-use argmin::core::{CostFunction, Error, Gradient, Executor, State, Hessian};
 //use plotters::prelude::*;
-use argmin::solver::trustregion::{TrustRegion, CauchyPoint};
-use na::{Vector6, Vector4, Matrix4};
+use argmin::solver::trustregion::{CauchyPoint, TrustRegion};
 use finitediff::FiniteDiff;
-use rayon::prelude::*;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::{Receiver, Sender};
+use na::{Matrix4, Vector4, Vector6};
 use nalgebra as na;
 use ndarray::{Array1, Array2};
+use rayon::prelude::*;
 use std::env;
 use std::f64::consts::PI;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::sync::mpsc::channel;
+use std::sync::mpsc::{Receiver, Sender};
 
 mod pmcgraph;
 //mod graph;
@@ -24,8 +24,8 @@ use crate::pmcgraph::PmcGraph;
 
 type Nab = u32;
 type Flo = f64;
-const DELTA: Flo = 2.0*0.016; //want C_{18}n\delta < C_{18}n 1/(n*20) = 6/20 
-//const DIV: FLO = 1.0;//1.0;
+const DELTAMOD: Flo = 0.016; //want C_{18}n\delta < C_{18}n 1/(n*20) = 6/20
+                                //const DIV: FLO = 1.0;//1.0;
 
 fn mu(x_point: &Vector4<Flo>, q_point: &Vector4<Flo>) -> Flo {
     let dist: Flo = (x_point - q_point).norm();
@@ -64,7 +64,7 @@ fn find_disc(x0_point: &Vector4<FLO>, x_vals: &Vec<Vector4<FLO>>, n: usize) -> O
         4 => return Some(x_vals.clone()),
         0..=3 => {
             //println!("Error, this ball has too few points in it");
-            return None    
+            return None
         }
         _ =>    {
             let mut output: Vec<Vector4<FLO>> = vec![];
@@ -136,7 +136,7 @@ fn find_r(arr: &Vec<Vector4<FLO>>) -> Option<FLO>{
                     }
                     //discs.push(x);
                 },
-                _ => { 
+                _ => {
                     //r_abs_max = r_abs_max.min(r);
                     r_abs_min = r_abs_min.max(r);
                     println!("Found point {} a too small one:{}, have to decrease r", ball.0, ball.1.len());
@@ -154,7 +154,7 @@ fn find_r(arr: &Vec<Vector4<FLO>>) -> Option<FLO>{
     for ball in r_balls {
         let disc = find_disc(ball.0, &ball.1, 4);
         match disc {
-            Some(x) => { 
+            Some(x) => {
                 if points_dist(&ball.1,&x) >= DELTA*r {
                     println!("You have to increase DELTA for this to work.");
                     r_abs_max = r_abs_max.min(r);
@@ -162,7 +162,7 @@ fn find_r(arr: &Vec<Vector4<FLO>>) -> Option<FLO>{
                 }
                 //discs.push(x);
             },
-            _ => { 
+            _ => {
                 r_abs_min = r_abs_min.max(r);
                 //println!("Found a too small one:{}, have to increase r", ball.1.len());
                 return None;
@@ -211,7 +211,7 @@ fn ball_rad_r(x_point: &Vector4<FLO>, points: &Vec<Vector4<FLO>>, r: FLO) -> Vec
     .collect()
     // let mut output: Vec<Vector6<FLO>> = vec![];
     // for p in points {
-    //     if 0.0 < (x_point-p).norm() && 
+    //     if 0.0 < (x_point-p).norm() &&
     //         (x_point-p).norm() <= r {
     //             output.push(p.clone());
     //     }
@@ -256,44 +256,69 @@ fn lin_solve<'a>(points_at_clique: &Vec<Vector4<FLO>>, func: &'a Box<dyn Fn(Vect
 
         }
         //println!("{}", &cost.norm_func(&(start + Vector4::from_vec(vec![DELTA/2.0,DELTA/2.0,DELTA/2.0,DELTA/2.0]))));
-    }   
+    }
     println!("best val {} and best point: {:?}", best_val, best_point);
 }
 */
 
-fn get_qs(max_clique: Vec<Nab>, points: &Vec<Vector6<Flo>>) -> (Vec<Vector4<Flo>>, Vec<Matrix4<Flo>>) {
+fn get_qs(max_clique: Vec<Nab>, points: &[Vector6<Flo>]) -> (Vec<Vector4<Flo>>, Vec<Matrix4<Flo>>) {
     let points_q = max_clique.iter().map(|p| points[*p as usize]);
     let points_clone = points_q.clone().map(|q| coords(&q));
     //let x_ones = points_q.clone().map(|q| ball_rad_r(&q, points,  40.0));
     //let spaces_q = points_q.zip(x_ones).map(|(q,x)| na::Matrix6x4::from_columns(&find_disc(&q, &x, 4).unwrap()));
-    let projs = points_q.map(proj_from_normal);//spaces_q
-        //.map(|mat| 
-        //    na::linalg::QR::new(mat).q())
-        //    .map(|q| q*q.transpose());
+    let projs = points_q.map(proj_from_normal); //spaces_q
+                                                //.map(|mat|
+                                                //    na::linalg::QR::new(mat).q())
+                                                //    .map(|q| q*q.transpose());
     (points_clone.collect(), projs.collect())
 }
 
-fn proj_from_normal(point: Vector6<Flo>) -> Matrix4<Flo>{
-    let normal: Vector4<Flo> = Vector4::from_vec(vec![Flo::cos(PI*point[2]/180.0),Flo::sin(PI*point[2]/180.0),-Flo::cos(PI*point[5]/180.0),-Flo::sin(PI*point[5]/180.0)]);
-    //both of the following methods work the one used now is faster
-    // println!("normal: {}", point[2]);
-    // let mat: Matrix4x3<FLO> = Matrix4x3::new(
-    //     -normal[1],-normal[2],-normal[3],
-    //     normal[0],normal[3],-normal[2],
-    //     -normal[3],normal[0],normal[1],
-    //     normal[2],-normal[1], normal[0]
-    // );
-    // let q = na::linalg::QR::new(mat).q();//.map(|q| q*q.transpose())
-    // q*q.transpose()
+fn proj_from_normal(point: Vector6<Flo>) -> Matrix4<Flo> {
+    let normal: Vector4<Flo> = Vector4::from_vec(vec![
+        Flo::cos(PI * point[2] / 180.0),
+        Flo::sin(PI * point[2] / 180.0),
+        -Flo::cos(PI * point[5] / 180.0),
+        -Flo::sin(PI * point[5] / 180.0),
+    ]);
+    /*
+    both of the following methods work the one used now is faster
+    println!("normal: {}", point[2]);
+    let mat: Matrix4x3<FLO> = Matrix4x3::new(
+        -normal[1],-normal[2],-normal[3],
+        normal[0],normal[3],-normal[2],
+        -normal[3],normal[0],normal[1],
+        normal[2],-normal[1], normal[0]
+    );
+    let q = na::linalg::QR::new(mat).q();//.map(|q| q*q.transpose())
+    q*q.transpose()
+    */
     -Matrix4::new(
-        normal[0]*normal[0]-2.0,normal[0]*normal[1],normal[0]*normal[2],normal[0]*normal[3],
-        normal[1]*normal[0],normal[1]*normal[1]-2.0,normal[1]*normal[2],normal[1]*normal[3],
-        normal[2]*normal[0],normal[2]*normal[1],normal[2]*normal[2]-2.0,normal[2]*normal[3],
-        normal[3]*normal[0],normal[3]*normal[1],normal[3]*normal[2],normal[3]*normal[3]-2.0,
-    )/2.0
+        normal[0] * normal[0] - 2.0,
+        normal[0] * normal[1],
+        normal[0] * normal[2],
+        normal[0] * normal[3],
+        normal[1] * normal[0],
+        normal[1] * normal[1] - 2.0,
+        normal[1] * normal[2],
+        normal[1] * normal[3],
+        normal[2] * normal[0],
+        normal[2] * normal[1],
+        normal[2] * normal[2] - 2.0,
+        normal[2] * normal[3],
+        normal[3] * normal[0],
+        normal[3] * normal[1],
+        normal[3] * normal[2],
+        normal[3] * normal[3] - 2.0,
+    ) / 2.0
 }
 
-fn chunk_clique(chunk_size: u32, verts: &Vec<Nab>, arr: &Vec<Vector6<Flo>>, divisor_r: Flo, increase_factor: u32) -> Vec<Nab> {
+fn chunk_clique(
+    chunk_size: u32,
+    verts: &[Nab],
+    arr: &[Vector6<Flo>],
+    divisor_r: Flo,
+    increase_factor: u32,
+) -> Vec<Nab> {
     let mut collected_verts: Vec<Nab> = vec![];
     let chunks = verts.chunks(chunk_size as usize);
 
@@ -304,62 +329,69 @@ fn chunk_clique(chunk_size: u32, verts: &Vec<Nab>, arr: &Vec<Vector6<Flo>>, divi
         let mut edgs: Vec<(Nab, Nab)> = vec![];
         for j in 0..chunk_len {
             for k in 0..j {
-                if 100.0*(coords(&(arr[chunk[j] as usize] - arr[chunk[k] as usize])))
-                    .norm()    
-                    >= divisor_r 
+                if 100.0 * (coords(&(arr[chunk[j] as usize] - arr[chunk[k] as usize]))).norm()
+                    >= divisor_r
                 {
                     edgs.push((chunk[j] as Nab, chunk[k] as Nab));
                 }
             }
         }
-        println!(
-            "\tWe have #verts= {}, #edges={}, density={}.",
-            chunk_len,
-            edgs.len(),
-            ((2 * edgs.len()) as Flo) / ((chunk_len as Flo) * (chunk_len - 1) as Flo)
-        );
+        // println!(
+        //     "\tWe have #verts= {}, #edges={}, density={}.",
+        //     chunk_len,
+        //     edgs.len(),
+        //     ((2 * edgs.len()) as Flo) / ((chunk_len as Flo) * (chunk_len - 1) as Flo)
+        // );
 
         let graph = PmcGraph::new(chunk.to_vec(), edgs);
-        let now2 = std::time::Instant::now();
+        //let now2 = std::time::Instant::now();
         collected_verts.extend(
             graph
                 .search_bounds()
                 .into_iter()
                 .map(|val| chunk[val as usize]),
         );
-        let elapsed_time = now2.elapsed();
-        println!(
-            "\tIt took {} milliseconds to compute the clique\n",
-            elapsed_time.as_millis(),
-        );
+        //let elapsed_time = now2.elapsed();
+        // println!(
+        //     "\tIt took {} milliseconds to compute the clique\n",
+        //     elapsed_time.as_millis(),
+        // );
     }
     if chunk_amount == 1 {
         return collected_verts;
     }
-    chunk_clique(chunk_size*increase_factor, &collected_verts, arr, divisor_r, increase_factor)
+    chunk_clique(
+        chunk_size * increase_factor,
+        &collected_verts,
+        arr,
+        divisor_r,
+        increase_factor,
+    )
 }
 
 fn read_file_to_mat(file_path: &String) -> Vec<Vector6<Flo>> {
     let f = BufReader::new(File::open(file_path).unwrap());
 
-    f
-        .lines()
+    f.lines()
         .map(|l| {
             Vector6::from_iterator(
-            l.unwrap()
-                .split_whitespace()
-                .map(|number| number.parse::<Flo>().unwrap())
+                l.unwrap()
+                    .split_whitespace()
+                    .map(|number| number.parse::<Flo>().unwrap()),
             )
         })
         .collect()
 }
 
-fn coords (point: &Vector6<Flo>) -> Vector4<Flo> {
-    Vector4::from_vec(vec![point[0],point[1],point[3],point[4]])
+fn coords(point: &Vector6<Flo>) -> Vector4<Flo> {
+    Vector4::from_vec(vec![point[0], point[1], point[3], point[4]])
 }
 
-fn define_f<'a>(arr_at_clique: &'a Vec<Vector4<Flo>>, mats: &'a Vec<Matrix4<Flo>>, divisor_r: &'a Flo) 
-    -> Box<dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync> {
+fn define_f<'a>(
+    arr_at_clique: &'a [Vector4<Flo>],
+    mats: &'a [Matrix4<Flo>],
+    divisor_r: &'a Flo,
+) -> Box<dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync> {
     /*
     The code below is the rust equivalent of this python code:
     def gettingF(points_q, Qs):
@@ -367,36 +399,43 @@ fn define_f<'a>(arr_at_clique: &'a Vec<Vector4<Flo>>, mats: &'a Vec<Matrix4<Flo>
         mus = [lambda y: mu(y,q) for q in points_q]
         phis = [lambda y: mus[val](y)*Ps[val](y)+(1-mus[val](y))*y for val in range(len(points_q))]
         return lambda y: fFromPhis(y, phis=phis)
- 
+
     def fFromPhis(y0, phis):
         y = y0
         for phi in phis:
             y = phi(y)
         return y
     */
-    let projs = 
-            arr_at_clique.iter()
-            .map(|a| a/ *divisor_r)
-            .zip(mats)
-            .map(|(arr,mat)| 
-                {move |y: Vector4<Flo>| (mat*y + arr,mu(&y, &arr))});
-    let phis = projs.map(|func| {move |y: Vector4<Flo>| func(y).1*func(y).0 + (1.0-func(y).1)*y});
+    let projs = arr_at_clique
+        .iter()
+        .map(|a| a / *divisor_r)
+        .zip(mats)
+        .map(|(arr, mat)| move |y: Vector4<Flo>| (mat * y + arr, mu(&y, &arr)));
+    let phis =
+        projs.map(|func| move |y: Vector4<Flo>| func(y).1 * func(y).0 + (1.0 - func(y).1) * y);
     //phis.clone().fold(Vector4::from_vec(vec![58.0, 112.0, 166.0, 54.0]), move|acc, phi| {println!("{:?}",phi(acc)); phi(acc)});
     //phis.clone().fold(Vector4::from_vec(vec![138.0, 104.0, 71.0, 142.0]), move|acc, phi| {println!("{:?}",phi(acc)); phi(acc)});
-    Box::new(move |y: Vector4<Flo>| phis.clone().fold(y, move|acc, phi| {//print!("{}",phi(acc)); 
-    phi(acc)}).map(|v| v* *divisor_r))
+    Box::new(move |y: Vector4<Flo>| {
+        phis.clone()
+            .fold(y, move |acc, phi| {
+                //print!("{}",phi(acc));
+                phi(acc)
+            })
+            .map(|v| v * *divisor_r)
+    })
 }
 
 #[derive(Clone)]
 struct FuncToMin<'a> {
     point_to_find: &'a Vector4<Flo>,
-    fun: &'a Box<dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a>,
+    fun: &'a (dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync),
 }
 
 impl FuncToMin<'_> {
     fn norm_func(&self, p: &Vector4<Flo>) -> Flo {
         Flo::sqrt(
-            ((self.fun)(*p)[0]-self.point_to_find[0]).powi(2)+((self.fun)(*p)[1]-self.point_to_find[1]).powi(2)
+            ((self.fun)(*p)[0] - self.point_to_find[0]).powi(2)
+                + ((self.fun)(*p)[1] - self.point_to_find[1]).powi(2),
         )
         //((self.fun)(*p) - self.point_to_find).norm()
     }
@@ -404,7 +443,8 @@ impl FuncToMin<'_> {
         self.norm_func(&Vector4::from_column_slice(y.as_slice().unwrap()))
     }
     fn array_gradient(&self, y: Array1<Flo>) -> Vector4<Flo> {
-        self.gradient(&Vector4::from_column_slice(y.as_slice().unwrap())).unwrap()
+        self.gradient(&Vector4::from_column_slice(y.as_slice().unwrap()))
+            .unwrap()
     }
 }
 
@@ -426,8 +466,10 @@ impl Gradient for FuncToMin<'_> {
     /// Type of the gradient
     type Gradient = Vector4<Flo>;
     /// Compute the gradient at parameter `p`.
-    fn gradient(&self, p: &Self::Param) -> Result<Self::Gradient, Error> {            
-        let grad = FiniteDiff::forward_diff(&Array1::from_vec(vec![p[0],p[1],p[2],p[3]]), &{|x| self.array_norm_func(x.clone()) });
+    fn gradient(&self, p: &Self::Param) -> Result<Self::Gradient, Error> {
+        let grad = FiniteDiff::forward_diff(&Array1::from_vec(vec![p[0], p[1], p[2], p[3]]), &{
+            |x| self.array_norm_func(x.clone())
+        });
         //println!("{}", grad);
         Ok(Vector4::from_column_slice(grad.as_slice().unwrap()))
     }
@@ -441,59 +483,93 @@ impl Hessian for FuncToMin<'_> {
     /// Compute gradient of rosenbrock function
     fn hessian(&self, p: &Self::Param) -> Result<Self::Hessian, Error> {
         //let func2 = {|y: &Array1<FLO>| self.norm_func(Vector4::from_column_slice(y.as_slice().unwrap()))};
-        let grad = FiniteDiff::central_hessian(&Array1::from_vec(vec![p[0],p[1],p[2],p[3]]), &{|x| Array1::from_vec(vec![self.array_gradient(x.clone())[0],self.array_gradient(x.clone())[1],self.array_gradient(x.clone())[2],self.array_gradient(x.clone())[3]])});//self.array_norm_func(x.clone()) });
-        //let grad = FiniteDiff::forward_hessian_nograd(&y, &func2);
-        //println!("{}", grad);
+        let grad = FiniteDiff::central_hessian(&Array1::from_vec(vec![p[0], p[1], p[2], p[3]]), &{
+            |x| {
+                Array1::from_vec(vec![
+                    self.array_gradient(x.clone())[0],
+                    self.array_gradient(x.clone())[1],
+                    self.array_gradient(x.clone())[2],
+                    self.array_gradient(x.clone())[3],
+                ])
+            }
+        }); //self.array_norm_func(x.clone()) });
+            //let grad = FiniteDiff::forward_hessian_nograd(&y, &func2);
+            //println!("{}", grad);
 
         Ok(Matrix4::new(
-            grad[(0,0)], grad[(0,1)], grad[(0,2)],grad[(0,3)],
-            grad[(1,0)], grad[(1,1)], grad[(1,2)],grad[(1,3)],
-            grad[(2,0)], grad[(2,1)], grad[(2,2)],grad[(2,3)],
-            grad[(3,0)], grad[(3,1)], grad[(3,2)],grad[(3,3)],
+            grad[(0, 0)],
+            grad[(0, 1)],
+            grad[(0, 2)],
+            grad[(0, 3)],
+            grad[(1, 0)],
+            grad[(1, 1)],
+            grad[(1, 2)],
+            grad[(1, 3)],
+            grad[(2, 0)],
+            grad[(2, 1)],
+            grad[(2, 2)],
+            grad[(2, 3)],
+            grad[(3, 0)],
+            grad[(3, 1)],
+            grad[(3, 2)],
+            grad[(3, 3)],
         ))
         //Ok(Matrix4::from_column_slice(grad.as_slice().unwrap()))
         //Ok(rosenbrock_2d_hessian(param, 1.0, 100.0))
     }
 }
 
-fn solve<'a>(points_at_clique: &Vec<Vector4<Flo>>, func: &'a Box<dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a>, point_to_find: &Vector4<Flo>, divisor_r: Flo) 
--> (Flo, Vector4<Flo>){
-    let cost = FuncToMin {point_to_find, fun: func};
+/*
+fn solve<'a>(
+    points_at_clique: &[Vector4<Flo>],
+    func: &'a (dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync),
+    point_to_find: &Vector4<Flo>,
+    divisor_r: Flo,
+) -> (Flo, Vector4<Flo>) {
+    let cost = FuncToMin {
+        point_to_find,
+        fun: func,
+    };
 
     let mut best_point: Vector4<Flo> = points_at_clique[0];
     let mut best_val: Flo = 10e10;
 
     for start in points_at_clique {
-    
         let cp = argmin::solver::trustregion::CauchyPoint::new();
-        let tr = TrustRegion::new(cp).with_max_radius(DELTA*divisor_r).unwrap().with_radius(divisor_r*DELTA/100.0).unwrap();
-    
+        let tr = TrustRegion::new(cp)
+            .with_max_radius(DELTA * divisor_r)
+            .unwrap()
+            .with_radius(divisor_r * DELTA / 100.0)
+            .unwrap();
+
         //let linesearch: MoreThuenteLineSearch<Vector4<FLO>, Vector4<FLO>, FLO> = MoreThuenteLineSearch::new()
         //    .with_bounds(DELTA/100000.0,DELTA/10000.0).expect("msg");
         //let solver = SteepestDescent::new(linesearch);
-    
+
         let res = Executor::new(cost.clone(), tr)
-        // Via `configure`, one has access to the internally used state.
-        // This state can be initialized, for instance by providing an
-        // initial parameter vector.
-        // The maximum number of iterations is also set via this method.
-        // In this particular case, the state exposed isstart
-        // Population based solvers use `PopulationState` instead of 
-        // `IterState`.
-        .configure(|state|
-            state
-                // Set initial parameters (depending on the solver,
-                // this may be required)
-                .param(*start)
-                // Set maximum iterations to 10
-                // (optional, set to `std::u64::MAX` if not provided)
-                .max_iters(10)
-                // Set target cost. The solver stops when this cost
-                // function value is reached (optional)
-                //.target_cost(0.0)
-        )
-        // run the solver on the defined problem
-        .run().unwrap();
+            // Via `configure`, one has access to the internally used state.
+            // This state can be initialized, for instance by providing an
+            // initial parameter vector.
+            // The maximum number of iterations is also set via this method.
+            // In this particular case, the state exposed isstart
+            // Population based solvers use `PopulationState` instead of
+            // `IterState`.
+            .configure(
+                |state| {
+                    state
+                        // Set initial parameters (depending on the solver,
+                        // this may be required)
+                        .param(*start)
+                        // Set maximum iterations to 10
+                        // (optional, set to `std::u64::MAX` if not provided)
+                        .max_iters(10)
+                }, // Set target cost. The solver stops when this cost
+                   // function value is reached (optional)
+                   //.target_cost(0.0)
+            )
+            // run the solver on the defined problem
+            .run()
+            .unwrap();
         let best_res = res.state.get_best_cost();
         if best_res < best_val {
             best_point = *res.state.get_best_param().unwrap();
@@ -505,17 +581,20 @@ fn solve<'a>(points_at_clique: &Vec<Vector4<Flo>>, func: &'a Box<dyn Fn(Vector4<
     //println!("best val: {} and best point: f({}) = {}, when trying to find {}", best_val, best_point, func(best_point), point_to_find);
     (best_val, best_point)
 }
+*/
 
-fn match_to_input<'a>(points_at_clique: &Vec<Vector4<Flo>>, func: &'a Box<dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync>, point_to_find: &Vector4<Flo>, divisor_r: Flo) 
--> Flo {
+fn match_to_input(
+    points_at_clique: &[Vector4<Flo>],
+    cost: &FindingR, //func: &'a(dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync), point_to_find: &Vector4<Flo>,
+    divisor_r: Flo,
+    delta_mult: Flo,
+    max_iters: usize,
+) -> (Flo, Vector4<Flo>) {
     let mut best_val: Flo = 10e10;
-    let mut best_param: Vector4<Flo> = Vector4::from_vec(vec![0.0,0.0,0.0,0.0]);
+    let mut best_param: Vector4<Flo> = Vector4::from_vec(vec![0.0, 0.0, 0.0, 0.0]);
 
     for start in points_at_clique {
-        
-        let star = Array1::from_vec(vec![start[0],start[1],start[2],start[3]]);
-        let cost = FindingR {point_to_find, fun: func};
-
+        let star = Array1::from_vec(vec![start[0], start[1], start[2], start[3]]);
 
         // let linesearch: BacktrackingLineSearch<Array1<FLO>, Array1<FLO>,_, FLO> = BacktrackingLineSearch::new(ArmijoCondition::new(0.0001f64).unwrap());
         //     //.with_bounds(divisor_r*DELTA/500.0,divisor_r*DELTA/10.0).unwrap();
@@ -528,20 +607,18 @@ fn match_to_input<'a>(points_at_clique: &Vec<Vector4<Flo>>, func: &'a Box<dyn Fn
         // let (mut state_out, kv) = cp.init(&mut Problem::new(cost), state).unwrap();
         let cp: CauchyPoint<Flo> = argmin::solver::trustregion::CauchyPoint::new();
 
-
-        let sr1: SR1TrustRegion<_, f64> = SR1TrustRegion::new(cp).with_radius(divisor_r*DELTA);
-        let res = Executor::new(cost,  sr1)
-        .configure(|state|
-            state
-                .param(star)
-                .max_iters(5)
-        )
-        // run the solver on the defined problem
-        .run().unwrap();
+        let sr1: SR1TrustRegion<_, f64> = SR1TrustRegion::new(cp).with_radius(divisor_r * delta_mult*DELTAMOD);
+        let res = Executor::new(cost.clone(), sr1)
+            .configure(|state| state.param(star).max_iters(max_iters as u64))
+            // run the solver on the defined problem
+            .run()
+            .unwrap();
         let best_res = res.state().best_cost;
         if best_res < best_val {
             best_val = best_res;
-            best_param = Vector4::from_column_slice(res.state().best_param.as_ref().unwrap().as_slice().unwrap());
+            best_param = Vector4::from_column_slice(
+                res.state().best_param.as_ref().unwrap().as_slice().unwrap(),
+            );
         }
     }
     //     let cost = FindingR {point_to_find, fun: func};
@@ -564,19 +641,18 @@ fn match_to_input<'a>(points_at_clique: &Vec<Vector4<Flo>>, func: &'a Box<dyn Fn
     //         best_param = res.state().best_param.unwrap();
     //     }
     // }
-    // println!("When trying to find {}, we instead found {}", point_to_find, func(best_param));
-    best_val
+    (best_val, best_param)
 }
 
 #[derive(Clone)]
 struct FindingR<'a> {
     point_to_find: &'a Vector4<Flo>,
-    fun: &'a Box<dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync>,
+    fun: &'a (dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync),
 }
 
 impl FindingR<'_> {
     fn norm_func(&self, p: &Vector4<Flo>) -> Flo {
-        ((self.fun)(*p)-self.point_to_find).norm()
+        ((self.fun)(*p) - self.point_to_find).norm()
         // FLO::sqrt(
         //     ((self.fun)(*p)[0]-self.point_to_find[0]).powi(2)+((self.fun)(*p)[1]-self.point_to_find[1]).powi(2)
         // )
@@ -608,8 +684,8 @@ impl Gradient for FindingR<'_> {
     /// Type of the gradient
     type Gradient = Array1<Flo>;
     /// Compute the gradient at parameter `p`.
-    fn gradient(&self, p: &Self::Param) -> Result<Self::Gradient, Error> {            
-        let grad = FiniteDiff::forward_diff(p, &{|x| self.array_norm_func(x)});
+    fn gradient(&self, p: &Self::Param) -> Result<Self::Gradient, Error> {
+        let grad = FiniteDiff::forward_diff(p, &{ |x| self.array_norm_func(x) });
         //println!("{}", grad);
         Ok(grad)
         //Ok(Vector4::from_column_slice(grad.as_slice().unwrap()))
@@ -624,7 +700,7 @@ impl Hessian for FindingR<'_> {
     /// Compute gradient of rosenbrock function
     fn hessian(&self, p: &Self::Param) -> Result<Self::Hessian, Error> {
         //let func2 = {|y: &Array1<FLO>| self.norm_func(Vector4::from_column_slice(y.as_slice().unwrap()))};
-        let grad = FiniteDiff::forward_hessian(p, &{|x| self.gradient(x).unwrap()});//self.array_norm_func(x.clone()) });
+        let grad = FiniteDiff::forward_hessian(p, &{ |x| self.gradient(x).unwrap() }); //self.array_norm_func(x.clone()) });
         //let grad = FiniteDiff::forward_hessian_nograd(&y, &func2);
         //println!("{}", grad);
         Ok(grad)
@@ -639,23 +715,42 @@ impl Hessian for FindingR<'_> {
     }
 }
 
-fn error_in_f(chunk_size: Nab, len: usize, divisor_r: Flo, arr: &Vec<Vector6<Flo>>) -> Flo{ 
+fn error_in_f(chunk_size: Nab, len: usize, divisor_r: Flo, arr: &[Vector6<Flo>], delta_mult: Flo, max_iter: usize) -> Flo {
     let mut avg_small_dist: Flo = 0.0;
+    let amount: usize = 100;
     let (sender_glo, receiver): (Sender<Flo>, Receiver<Flo>) = channel();
-    let max_clique = chunk_clique(chunk_size, &(0..(len as Nab)).collect::<Vec<Nab>>(), arr, divisor_r, 2);
+    let max_clique = chunk_clique(
+        chunk_size,
+        &(0..(len as Nab)).collect::<Vec<Nab>>(),
+        arr,
+        divisor_r,
+        2,
+    );
     let vals = get_qs(max_clique, arr);
     let arr4 = arr.iter().map(coords).collect::<Vec<Vector4<Flo>>>();
     // vals.0 = vals.0.iter().map(|v| v/divisor_r).collect();
     let func = define_f(&vals.0, &vals.1, &divisor_r);
-    arr.into_par_iter().skip(len-100).for_each_with(sender_glo,|sender, p| {
-        sender.send(match_to_input(&arr4, &func, &coords(p), divisor_r)).unwrap();
-    });
-    for _ in 0..100 {
+    arr.into_par_iter()
+        .skip(len - amount)
+        .for_each_with(sender_glo, |sender, p| {
+            let cost = FindingR {
+                point_to_find: &coords(p),
+                fun: &func,
+            };
+            let ret = match_to_input(&arr4, &cost, divisor_r, delta_mult, max_iter);
+            // println!(
+            //     "When trying to find {}, we instead found {}",
+            //     &coords(p),
+            //     func(ret.1)
+            // );
+            sender.send(ret.0).unwrap();
+        });
+    for _ in 0..amount {
         let results = receiver.recv().unwrap();
         avg_small_dist += results;
     }
-    avg_small_dist /= 100.0;// as FLO;
-    println!("Final avg dist is {avg_small_dist}");
+    avg_small_dist /= amount as Flo;
+    //println!("Final avg dist is {avg_small_dist}");
     avg_small_dist
 }
 
@@ -669,11 +764,11 @@ fn main() {
         2 => (), //corresponds to just a filename so then we don't chunk
         3 => chunk_size = args[2].parse::<usize>().unwrap() as Nab,
         _ => {
-            chunk_size = args[2].parse::<usize>().unwrap() as Nab; 
+            chunk_size = args[2].parse::<usize>().unwrap() as Nab;
             divisor_r = args[3].parse::<Flo>().unwrap();
-            }
+        }
     }
-    println!("We are choosing r to be {}", divisor_r);
+    //println!("We are choosing r to be {divisor_r}");
     let file_path = &args[1];
 
     let now = std::time::Instant::now();
@@ -682,23 +777,38 @@ fn main() {
 
     let mut elapsed_time = now.elapsed();
     let len = arr.len();
-    println!(
-        "Reading the file of points took {} milliseconds and we have {} many points",
-        elapsed_time.as_millis(),
-        len
-    );
+    // println!(
+    //     "Reading the file of points took {} milliseconds and we have {} many points",
+    //     elapsed_time.as_millis(),
+    //     len
+    // );
     if chunk_size > 0 {
-        println!("We are in chunking mode with chunk size {}", chunk_size);
-    }
-    else {
-        println!("We are in non-chunking mode");
+        //println!("We are in chunking mode with chunk size {chunk_size}");
+    } else {
+        //println!("We are in non-chunking mode");
         chunk_size = len as Nab + 1;
     }
 
-    error_in_f(chunk_size, len, divisor_r, &arr);
+    let file_len = file_path.len();
+    let mut skip = 0;
+    if file_len > 10 {
+        skip = file_len-10;
+    }
+    let name = file_path.chars().skip(skip).collect::<String>();
+    println!("DataFile  , #Points  , ChunkSize, #TestedPo, MaxIter  , divisor_r, DeltaMut , AvgDist   , Time     ");
+
+
+    for r in 1..=20{
+        for l in 1..=7 {
+            for k in 1..10 {
+                let now2 = std::time::Instant::now();
+                let err = error_in_f(chunk_size, len, 1000.0+(r as Flo)*50.0, &arr, k as Flo, 10*l);
+                println!("{name:10},{len:10},{chunk_size:10},       100,{:10},{:10},{k:10},{err:7.2},{:9}s", 10*l, 1000.0+(r as Flo)*50.0, now2.elapsed().as_secs());
+            }
+        }
+    }
 
     //let point_to_find = coords(&arr[21]);//8
-
 
     // let mut best_r: FLO = 1000.0;
     // let mut smallest_dist: FLO = 10e10;
@@ -708,14 +818,14 @@ fn main() {
     //    divisor_r = 1000.0+ (k as FLO)*50.0;
     //    println!("{}", divisor_r);
 
-        // if val < smallest_dist {
-        //     best_input = input;
-        //     best_out = output;
-        //     best_r = r;
-        //     smallest_dist = val;
-        //     print!("With divisor {}, we get a distance of {}", best_r, smallest_dist);
-        //     print!("where f({}) = {}, which is supposed to be {}", best_input, best_out, point_to_find);
-        // }
+    // if val < smallest_dist {
+    //     best_input = input;
+    //     best_out = output;
+    //     best_r = r;
+    //     smallest_dist = val;
+    //     print!("With divisor {}, we get a distance of {}", best_r, smallest_dist);
+    //     print!("where f({}) = {}, which is supposed to be {}", best_input, best_out, point_to_find);
+    // }
     //}
     // println!("This is the very final best one!");
     // print!("With divisor {}, we get a distance of {}", best_r, smallest_dist);
@@ -734,9 +844,9 @@ fn main() {
     //println!("It took {} micro seconds to calc {} qr decomps", elapsed_time2.as_micros(), vals.0.len());
     //let start = &vals.0[9].clone(); //4
 
-   // println!("{}", func(*point_to_find));
-   // let cost = FuncToMin {point_to_find: &point_to_find, fun: &func};
-    
+    // println!("{}", func(*point_to_find));
+    // let cost = FuncToMin {point_to_find: &point_to_find, fun: &func};
+
     //println!("{}", &cost.norm_func(&start));
 
     // let root_drawing_area = BitMapBackend::new("/home/leo/Documents/work/WFtranslator/feffer/images/0.1.png", (1024, 768))
@@ -759,7 +869,7 @@ fn main() {
 
     //let point_to_find: Vector4<FLO> = Vector4::from_vec(vec![0.04,1.0,32.0,1.0]);
     //println!("{}", func(start));
- 
+
     //Best parameter vector
     // let best = res.state().get_best_param().unwrap();
 

@@ -12,7 +12,7 @@ pub struct Graph {
     //degree: u64,
     max_degree: usize,
     min_degree: usize,
-    avg_degree_frac: (usize,usize),
+    avg_degree_frac: (usize, usize),
     max_core: usize,
     adjmtx: AdjMtx,
     is_gstats: bool,
@@ -28,8 +28,16 @@ impl Graph {
         for n in 1..=nodes {
             adjmtx.insert(n, vec![]);
         }
-        Graph { adjmtx, max_degree: 0, min_degree: 0, avg_degree_frac: (0,1),
-            max_core: 0, is_gstats: false, kcore: vec![], kcore_order: vec![]}
+        Graph {
+            adjmtx,
+            max_degree: 0,
+            min_degree: 0,
+            avg_degree_frac: (0, 1),
+            max_core: 0,
+            is_gstats: false,
+            kcore: vec![],
+            kcore_order: vec![],
+        }
     }
 
     /// Returns the graph degree.
@@ -99,7 +107,6 @@ impl Graph {
         if let Some(lst) = self.adjmtx.get_mut(&a) {
             lst.push(b);
             self.max_degree = cmp::max(self.max_degree, lst.len());
-
         } else {
             panic!("The node {} does not belong to this graph.", a);
         }
@@ -176,7 +183,7 @@ impl Graph {
     pub fn vertex_degrees(&mut self) {
         let orderedNodes = self.nodes_ord_by_degree();
         self.max_degree = self.degree_of(orderedNodes[0]);
-        self.min_degree = self.degree_of(orderedNodes[orderedNodes.len()-1]);
+        self.min_degree = self.degree_of(orderedNodes[orderedNodes.len() - 1]);
         self.avg_degree_frac = (self.sum_vertex_degrees(), self.adjmtx.len())
     }
 
@@ -233,10 +240,14 @@ impl Graph {
     }
 
     pub fn compute_cores(&mut self) {
-        let j: usize = 0; let n: usize = self.nlen(); let i: usize = 0;
-        let w: usize = 0; let du: usize = 0; let pu: usize = 0;
-        let pw: usize = 0; 
-        
+        let j: usize = 0;
+        let n: usize = self.nlen();
+        let i: usize = 0;
+        let w: usize = 0;
+        let du: usize = 0;
+        let pu: usize = 0;
+        let pw: usize = 0;
+
         let nodes = self.nodes();
         let edges = self.edges();
 
@@ -245,22 +256,21 @@ impl Graph {
             //let tmp: Vec<usize> = vec![0; n];
             self.kcore = vec![0; n];
             self.kcore_order = vec![0; n];
-        }
-        else {
+        } else {
             self.kcore_order.resize(n, 0);
             self.kcore.resize(n, 0);
         }
 
-        let mut md: usize = 0;        
+        let mut md: usize = 0;
         let a = self.adjmtx.keys();
         for v in 1..n {
-            self.kcore[v] = nodes[v] - nodes[v-1];
+            self.kcore[v] = nodes[v] - nodes[v - 1];
             if self.kcore[v] > md {
                 md = self.kcore[v];
             }
         }
 
-        let md_end: usize = md+1;
+        let md_end: usize = md + 1;
 
         let bin: Vec<usize> = vec![0; md_end];
         for v in 1..n {
@@ -283,31 +293,32 @@ impl Graph {
         }
 
         for d in (1..md).rev() {
-            bin[d] = bin[d-1];
+            bin[d] = bin[d - 1];
         }
         bin[0] = 1;
 
         let mut v: usize = 0;
-        let mut u: usize = 0; 
-        
+        let mut u: usize = 0;
+
         // kcores
         for i in 1..n {
-            v=self.kcore_order[i];
-            for j in nodes[v-1]..nodes[v]{
+            v = self.kcore_order[i];
+            for j in nodes[v - 1]..nodes[v] {
                 u = edges[j] + 1;
                 if (self.kcore[u] > self.kcore[v]) {
-                    du = kcore[u];   pu = pos[u];
-                    pw = bin[du];    w = kcore_order[pw];
+                    du = kcore[u];
+                    pu = pos[u];
+                    pw = bin[du];
+                    w = kcore_order[pw];
                     if (u != w) {
-                        pos[u] = pw;   kcore_order[pu] = w;
-                        pos[w] = pu;   kcore_order[pw] = u;
+                        pos[u] = pw;
+                        kcore_order[pu] = w;
+                        pos[w] = pu;
+                        kcore_order[pw] = u;
                     }
                     //bin[du]++;   kcore[u]--;
                 }
             }
         }
-
     }
-
-
 }
