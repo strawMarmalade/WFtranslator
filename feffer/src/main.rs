@@ -715,27 +715,18 @@ impl Hessian for FindingR<'_> {
     }
 }
 
-fn error_in_f(chunk_size: Nab, len: usize, divisor_r: Flo, arr: &[Vector6<Flo>], delta_mult: Flo, max_iter: usize) -> Flo {
+fn error_in_f<'a>(arr: &[Vector6<Flo>], divisor_r: Flo, delta_mult: Flo, max_iter: usize, func: &'a (dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync)) -> Flo {
     let mut avg_small_dist: Flo = 0.0;
     let amount: usize = 100;
     let (sender_glo, receiver): (Sender<Flo>, Receiver<Flo>) = channel();
-    let max_clique = chunk_clique(
-        chunk_size,
-        &(0..(len as Nab)).collect::<Vec<Nab>>(),
-        arr,
-        divisor_r,
-        2,
-    );
-    let vals = get_qs(max_clique, arr);
     let arr4 = arr.iter().map(coords).collect::<Vec<Vector4<Flo>>>();
-    // vals.0 = vals.0.iter().map(|v| v/divisor_r).collect();
-    let func = define_f(&vals.0, &vals.1, &divisor_r);
+
     arr.into_par_iter()
-        .skip(len - amount)
+        .skip(arr4.len() - amount)
         .for_each_with(sender_glo, |sender, p| {
             let cost = FindingR {
                 point_to_find: &coords(p),
-                fun: &func,
+                fun: func,
             };
             let ret = match_to_input(&arr4, &cost, divisor_r, delta_mult, max_iter);
             // println!(
@@ -799,12 +790,26 @@ fn main() {
 
 
     for r in 1..=20{
+        let now3 = std::time::Instant::now();
+        divisor_r = 1000.0+(r as Flo)*50.0;
+        let max_clique = chunk_clique(
+            chunk_size,
+            &(0..(len as Nab)).collect::<Vec<Nab>>(),
+            &arr,
+            divisor_r,
+            2,
+        );
+        let vals = get_qs(max_clique, &arr);
+        // vals.0 = vals.0.iter().map(|v| v/divisor_r).collect();
+        let func = define_f(&vals.0, &vals.1, &divisor_r);
+        println!("At next r, and it took {}s to get the func", now3.elapsed().as_secs());
         for l in 1..=7 {
             for k in 1..10 {
                 let now2 = std::time::Instant::now();
-                let err = error_in_f(chunk_size, len, 1000.0+(r as Flo)*50.0, &arr, k as Flo, 10*l);
-                println!("{name:10},{len:10},{chunk_size:10},       100,{:10},{:10},{k:10},{err:7.2},{:9}s", 10*l, 1000.0+(r as Flo)*50.0, now2.elapsed().as_secs());
+                let err = error_in_f(&arr, divisor_r, k as Flo, 10*l, &func);
+                println!("{name:10},{len:10},{chunk_size:10},       100,{:10},{divisor_r:10},{k:10},{err:7.2},{:9}s", 10*l, now2.elapsed().as_secs());
             }
+            println!(" ");
         }
     }
 
