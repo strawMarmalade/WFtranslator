@@ -1,13 +1,10 @@
-use argmin::core::{CostFunction, Error, Gradient, Executor, State, Hessian, IterState, Problem};
-use argmin::solver::linesearch::condition::ArmijoCondition;
-use argmin::solver::linesearch::{MoreThuenteLineSearch, BacktrackingLineSearch};
-use argmin::solver::quasinewton::{BFGS, SR1TrustRegion};
+use argmin::solver::quasinewton::SR1TrustRegion;
+use argmin::core::{CostFunction, Error, Gradient, Executor, State, Hessian};
 //use plotters::prelude::*;
 use argmin::solver::trustregion::{TrustRegion, CauchyPoint};
 use na::{Vector6, Vector4, Matrix4};
 use finitediff::FiniteDiff;
 use rayon::prelude::*;
-use argmin::core::Solver;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::{Receiver, Sender};
 use nalgebra as na;
@@ -25,13 +22,13 @@ mod pmcgraph;
 //use crate::graph::Graph;
 use crate::pmcgraph::PmcGraph;
 
-type NAB = u32;
-type FLO = f64;
-const DELTA: FLO = 2.0*0.016; //want C_{18}n\delta < C_{18}n 1/(n*20) = 6/20 
+type Nab = u32;
+type Flo = f64;
+const DELTA: Flo = 2.0*0.016; //want C_{18}n\delta < C_{18}n 1/(n*20) = 6/20 
 //const DIV: FLO = 1.0;//1.0;
 
-fn mu(x_point: &Vector4<FLO>, q_point: &Vector4<FLO>) -> FLO {
-    let dist: FLO = (x_point - q_point).norm();
+fn mu(x_point: &Vector4<Flo>, q_point: &Vector4<Flo>) -> Flo {
+    let dist: Flo = (x_point - q_point).norm();
     (1.0 / (dist - 1.0 / 3.0)).exp()
         / ((1.0 / (dist - 1.0 / 3.0)).exp() + (1.0 / (1.0 / 2.0 - dist)).exp())
 }
@@ -264,20 +261,20 @@ fn lin_solve<'a>(points_at_clique: &Vec<Vector4<FLO>>, func: &'a Box<dyn Fn(Vect
 }
 */
 
-fn get_qs(max_clique: Vec<NAB>, points: &Vec<Vector6<FLO>>) -> (Vec<Vector4<FLO>>, Vec<Matrix4<FLO>>) {
+fn get_qs(max_clique: Vec<Nab>, points: &Vec<Vector6<Flo>>) -> (Vec<Vector4<Flo>>, Vec<Matrix4<Flo>>) {
     let points_q = max_clique.iter().map(|p| points[*p as usize]);
     let points_clone = points_q.clone().map(|q| coords(&q));
     //let x_ones = points_q.clone().map(|q| ball_rad_r(&q, points,  40.0));
     //let spaces_q = points_q.zip(x_ones).map(|(q,x)| na::Matrix6x4::from_columns(&find_disc(&q, &x, 4).unwrap()));
-    let projs = points_q.map(|q| proj_from_normal(q));//spaces_q
+    let projs = points_q.map(proj_from_normal);//spaces_q
         //.map(|mat| 
         //    na::linalg::QR::new(mat).q())
         //    .map(|q| q*q.transpose());
     (points_clone.collect(), projs.collect())
 }
 
-fn proj_from_normal(point: Vector6<FLO>) -> Matrix4<FLO>{
-    let normal: Vector4<FLO> = Vector4::from_vec(vec![FLO::cos(PI*point[2]/180.0),FLO::sin(PI*point[2]/180.0),-FLO::cos(PI*point[5]/180.0),-FLO::sin(PI*point[5]/180.0)]);
+fn proj_from_normal(point: Vector6<Flo>) -> Matrix4<Flo>{
+    let normal: Vector4<Flo> = Vector4::from_vec(vec![Flo::cos(PI*point[2]/180.0),Flo::sin(PI*point[2]/180.0),-Flo::cos(PI*point[5]/180.0),-Flo::sin(PI*point[5]/180.0)]);
     //both of the following methods work the one used now is faster
     // println!("normal: {}", point[2]);
     // let mat: Matrix4x3<FLO> = Matrix4x3::new(
@@ -296,22 +293,22 @@ fn proj_from_normal(point: Vector6<FLO>) -> Matrix4<FLO>{
     )/2.0
 }
 
-fn chunk_clique(chunk_size: u32, verts: &Vec<NAB>, arr: &Vec<Vector6<FLO>>, divisor_r: FLO, increase_factor: u32) -> Vec<NAB> {
-    let mut collected_verts: Vec<NAB> = vec![];
+fn chunk_clique(chunk_size: u32, verts: &Vec<Nab>, arr: &Vec<Vector6<Flo>>, divisor_r: Flo, increase_factor: u32) -> Vec<Nab> {
+    let mut collected_verts: Vec<Nab> = vec![];
     let chunks = verts.chunks(chunk_size as usize);
 
     let chunk_amount = chunks.len();
 
     for chunk in chunks {
         let chunk_len = chunk.len();
-        let mut edgs: Vec<(NAB, NAB)> = vec![];
+        let mut edgs: Vec<(Nab, Nab)> = vec![];
         for j in 0..chunk_len {
             for k in 0..j {
-                if 100.0*(coords(&(&arr[chunk[j] as usize] - &arr[chunk[k] as usize])))
+                if 100.0*(coords(&(arr[chunk[j] as usize] - arr[chunk[k] as usize])))
                     .norm()    
                     >= divisor_r 
                 {
-                    edgs.push((chunk[j] as NAB, chunk[k] as NAB));
+                    edgs.push((chunk[j] as Nab, chunk[k] as Nab));
                 }
             }
         }
@@ -319,7 +316,7 @@ fn chunk_clique(chunk_size: u32, verts: &Vec<NAB>, arr: &Vec<Vector6<FLO>>, divi
             "\tWe have #verts= {}, #edges={}, density={}.",
             chunk_len,
             edgs.len(),
-            ((2 * edgs.len()) as FLO) / ((chunk_len as FLO) * (chunk_len - 1) as FLO)
+            ((2 * edgs.len()) as Flo) / ((chunk_len as Flo) * (chunk_len - 1) as Flo)
         );
 
         let graph = PmcGraph::new(chunk.to_vec(), edgs);
@@ -342,7 +339,7 @@ fn chunk_clique(chunk_size: u32, verts: &Vec<NAB>, arr: &Vec<Vector6<FLO>>, divi
     chunk_clique(chunk_size*increase_factor, &collected_verts, arr, divisor_r, increase_factor)
 }
 
-fn read_file_to_mat(file_path: &String) -> Vec<Vector6<FLO>> {
+fn read_file_to_mat(file_path: &String) -> Vec<Vector6<Flo>> {
     let f = BufReader::new(File::open(file_path).unwrap());
 
     f
@@ -351,18 +348,18 @@ fn read_file_to_mat(file_path: &String) -> Vec<Vector6<FLO>> {
             Vector6::from_iterator(
             l.unwrap()
                 .split_whitespace()
-                .map(|number| number.parse::<FLO>().unwrap())
+                .map(|number| number.parse::<Flo>().unwrap())
             )
         })
         .collect()
 }
 
-fn coords (point: &Vector6<FLO>) -> Vector4<FLO> {
+fn coords (point: &Vector6<Flo>) -> Vector4<Flo> {
     Vector4::from_vec(vec![point[0],point[1],point[3],point[4]])
 }
 
-fn define_f<'a>(arr_at_clique: &'a Vec<Vector4<FLO>>, mats: &'a Vec<Matrix4<FLO>>, divisor_r: &'a FLO) 
-    -> Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a + Sync> {
+fn define_f<'a>(arr_at_clique: &'a Vec<Vector4<Flo>>, mats: &'a Vec<Matrix4<Flo>>, divisor_r: &'a Flo) 
+    -> Box<dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync> {
     /*
     The code below is the rust equivalent of this python code:
     def gettingF(points_q, Qs):
@@ -378,44 +375,44 @@ fn define_f<'a>(arr_at_clique: &'a Vec<Vector4<FLO>>, mats: &'a Vec<Matrix4<FLO>
         return y
     */
     let projs = 
-            arr_at_clique.into_iter()
+            arr_at_clique.iter()
             .map(|a| a/ *divisor_r)
             .zip(mats)
             .map(|(arr,mat)| 
-                {move |y: Vector4<FLO>| (mat*y + arr,mu(&y, &arr))});
-    let phis = projs.map(|func| {move |y: Vector4<FLO>| func(y).1*func(y).0 + (1.0-func(y).1)*y});
+                {move |y: Vector4<Flo>| (mat*y + arr,mu(&y, &arr))});
+    let phis = projs.map(|func| {move |y: Vector4<Flo>| func(y).1*func(y).0 + (1.0-func(y).1)*y});
     //phis.clone().fold(Vector4::from_vec(vec![58.0, 112.0, 166.0, 54.0]), move|acc, phi| {println!("{:?}",phi(acc)); phi(acc)});
     //phis.clone().fold(Vector4::from_vec(vec![138.0, 104.0, 71.0, 142.0]), move|acc, phi| {println!("{:?}",phi(acc)); phi(acc)});
-    Box::new(move |y: Vector4<FLO>| phis.clone().fold(y, move|acc, phi| {//print!("{}",phi(acc)); 
+    Box::new(move |y: Vector4<Flo>| phis.clone().fold(y, move|acc, phi| {//print!("{}",phi(acc)); 
     phi(acc)}).map(|v| v* *divisor_r))
 }
 
 #[derive(Clone)]
 struct FuncToMin<'a> {
-    point_to_find: &'a Vector4<FLO>,
-    fun: &'a Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a>,
+    point_to_find: &'a Vector4<Flo>,
+    fun: &'a Box<dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a>,
 }
 
 impl FuncToMin<'_> {
-    fn norm_func(&self, p: &Vector4<FLO>) -> FLO {
-        FLO::sqrt(
+    fn norm_func(&self, p: &Vector4<Flo>) -> Flo {
+        Flo::sqrt(
             ((self.fun)(*p)[0]-self.point_to_find[0]).powi(2)+((self.fun)(*p)[1]-self.point_to_find[1]).powi(2)
         )
         //((self.fun)(*p) - self.point_to_find).norm()
     }
-    fn array_norm_func(&self, y: Array1<FLO>) -> FLO {
+    fn array_norm_func(&self, y: Array1<Flo>) -> Flo {
         self.norm_func(&Vector4::from_column_slice(y.as_slice().unwrap()))
     }
-    fn array_gradient(&self, y: Array1<FLO>) -> Vector4<FLO> {
+    fn array_gradient(&self, y: Array1<Flo>) -> Vector4<Flo> {
         self.gradient(&Vector4::from_column_slice(y.as_slice().unwrap())).unwrap()
     }
 }
 
 impl CostFunction for FuncToMin<'_> {
     /// Type of the parameter vector
-    type Param = Vector4<FLO>;
+    type Param = Vector4<Flo>;
     /// Type of the return value computed by the cost function
-    type Output = FLO;
+    type Output = Flo;
     /// Apply the cost function to a parameter `p`
     fn cost(&self, p: &Self::Param) -> Result<Self::Output, Error> {
         //print!("{} ", self.norm_func(p));
@@ -425,9 +422,9 @@ impl CostFunction for FuncToMin<'_> {
 
 impl Gradient for FuncToMin<'_> {
     /// Type of the parameter vector
-    type Param = Vector4<FLO>;
+    type Param = Vector4<Flo>;
     /// Type of the gradient
-    type Gradient = Vector4<FLO>;
+    type Gradient = Vector4<Flo>;
     /// Compute the gradient at parameter `p`.
     fn gradient(&self, p: &Self::Param) -> Result<Self::Gradient, Error> {            
         let grad = FiniteDiff::forward_diff(&Array1::from_vec(vec![p[0],p[1],p[2],p[3]]), &{|x| self.array_norm_func(x.clone()) });
@@ -437,9 +434,9 @@ impl Gradient for FuncToMin<'_> {
 }
 
 impl Hessian for FuncToMin<'_> {
-    type Param = Vector4<FLO>;
+    type Param = Vector4<Flo>;
     /// Type of the gradient
-    type Hessian = Matrix4<FLO>;
+    type Hessian = Matrix4<Flo>;
 
     /// Compute gradient of rosenbrock function
     fn hessian(&self, p: &Self::Param) -> Result<Self::Hessian, Error> {
@@ -459,12 +456,12 @@ impl Hessian for FuncToMin<'_> {
     }
 }
 
-fn solve<'a>(points_at_clique: &Vec<Vector4<FLO>>, func: &'a Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a>, point_to_find: &Vector4<FLO>, divisor_r: FLO) 
--> (FLO, Vector4<FLO>){
+fn solve<'a>(points_at_clique: &Vec<Vector4<Flo>>, func: &'a Box<dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a>, point_to_find: &Vector4<Flo>, divisor_r: Flo) 
+-> (Flo, Vector4<Flo>){
     let cost = FuncToMin {point_to_find, fun: func};
 
-    let mut best_point: Vector4<FLO> = points_at_clique[0];
-    let mut best_val: FLO = 10e10;
+    let mut best_point: Vector4<Flo> = points_at_clique[0];
+    let mut best_val: Flo = 10e10;
 
     for start in points_at_clique {
     
@@ -509,34 +506,34 @@ fn solve<'a>(points_at_clique: &Vec<Vector4<FLO>>, func: &'a Box<dyn Fn(Vector4<
     (best_val, best_point)
 }
 
-fn match_to_input<'a>(points_at_clique: &Vec<Vector4<FLO>>, func: &'a Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a + Sync>, point_to_find: &Vector4<FLO>, divisor_r: FLO) 
--> FLO {
-    let mut best_val: FLO = 10e10;
-    let mut best_param: Vector4<FLO> = Vector4::from_vec(vec![0.0,0.0,0.0,0.0]);
+fn match_to_input<'a>(points_at_clique: &Vec<Vector4<Flo>>, func: &'a Box<dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync>, point_to_find: &Vector4<Flo>, divisor_r: Flo) 
+-> Flo {
+    let mut best_val: Flo = 10e10;
+    let mut best_param: Vector4<Flo> = Vector4::from_vec(vec![0.0,0.0,0.0,0.0]);
 
     for start in points_at_clique {
+        
         let star = Array1::from_vec(vec![start[0],start[1],start[2],start[3]]);
         let cost = FindingR {point_to_find, fun: func};
 
 
-        let linesearch: BacktrackingLineSearch<Array1<FLO>, Array1<FLO>,_, FLO> = BacktrackingLineSearch::new(ArmijoCondition::new(0.0001f64).unwrap());
-            //.with_bounds(divisor_r*DELTA/500.0,divisor_r*DELTA/10.0).unwrap();
-        let cp: BFGS<_, FLO> = argmin::solver::quasinewton::BFGS::new(linesearch);
-        let inv_hessian: Array2<FLO> = Array2::eye(4);
+        // let linesearch: BacktrackingLineSearch<Array1<FLO>, Array1<FLO>,_, FLO> = BacktrackingLineSearch::new(ArmijoCondition::new(0.0001f64).unwrap());
+        //     //.with_bounds(divisor_r*DELTA/500.0,divisor_r*DELTA/10.0).unwrap();
+        // let cp: DFP<_, FLO> = argmin::solver::quasinewton::DFP::new(linesearch);
+        // let inv_hessian: Array2<FLO> = Array2::eye(4);
         //let state = IterState::new()
         // .param(star)
         // .inv_hessian(inv_hessian);
         // //let tr = TrustRegion::new(cp).with_max_radius(divisor_r*DELTA).unwrap().with_radius(divisor_r*DELTA/100.0).unwrap();
         // let (mut state_out, kv) = cp.init(&mut Problem::new(cost), state).unwrap();
-        // let cp: CauchyPoint<FLO> = argmin::solver::trustregion::CauchyPoint::new();
+        let cp: CauchyPoint<Flo> = argmin::solver::trustregion::CauchyPoint::new();
 
 
-        // let sr1: SR1TrustRegion<_, f64> = SR1TrustRegion::new(cp).with_radius(divisor_r*DELTA/100.0);
-        let res = Executor::new(cost,  cp)
+        let sr1: SR1TrustRegion<_, f64> = SR1TrustRegion::new(cp).with_radius(divisor_r*DELTA);
+        let res = Executor::new(cost,  sr1)
         .configure(|state|
             state
                 .param(star)
-                .inv_hessian(inv_hessian)
                 .max_iters(5)
         )
         // run the solver on the defined problem
@@ -567,25 +564,25 @@ fn match_to_input<'a>(points_at_clique: &Vec<Vector4<FLO>>, func: &'a Box<dyn Fn
     //         best_param = res.state().best_param.unwrap();
     //     }
     // }
-    // println!("When trying to find {}, we instead found {}", point_to_find, best_param);
+    // println!("When trying to find {}, we instead found {}", point_to_find, func(best_param));
     best_val
 }
 
 #[derive(Clone)]
 struct FindingR<'a> {
-    point_to_find: &'a Vector4<FLO>,
-    fun: &'a Box<dyn Fn(Vector4<FLO>) -> Vector4<FLO> + 'a + Sync>,
+    point_to_find: &'a Vector4<Flo>,
+    fun: &'a Box<dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync>,
 }
 
 impl FindingR<'_> {
-    fn norm_func(&self, p: &Vector4<FLO>) -> FLO {
+    fn norm_func(&self, p: &Vector4<Flo>) -> Flo {
         ((self.fun)(*p)-self.point_to_find).norm()
         // FLO::sqrt(
         //     ((self.fun)(*p)[0]-self.point_to_find[0]).powi(2)+((self.fun)(*p)[1]-self.point_to_find[1]).powi(2)
         // )
         //((self.fun)(*p) - self.point_to_find).norm()
     }
-    fn array_norm_func(&self, y: &Array1<FLO>) -> FLO {
+    fn array_norm_func(&self, y: &Array1<Flo>) -> Flo {
         self.norm_func(&Vector4::from_column_slice(y.as_slice().unwrap()))
     }
     // fn array_gradient(&self, y: &Array1<FLO>) -> Array1<FLO> {
@@ -595,9 +592,9 @@ impl FindingR<'_> {
 
 impl CostFunction for FindingR<'_> {
     /// Type of the parameter vector
-    type Param = Array1<FLO>;
+    type Param = Array1<Flo>;
     /// Type of the return value computed by the cost function
-    type Output = FLO;
+    type Output = Flo;
     /// Apply the cost function to a parameter `p`
     fn cost(&self, p: &Self::Param) -> Result<Self::Output, Error> {
         //print!("{} ", self.norm_func(p));
@@ -607,9 +604,9 @@ impl CostFunction for FindingR<'_> {
 
 impl Gradient for FindingR<'_> {
     /// Type of the parameter vector
-    type Param = Array1<FLO>;
+    type Param = Array1<Flo>;
     /// Type of the gradient
-    type Gradient = Array1<FLO>;
+    type Gradient = Array1<Flo>;
     /// Compute the gradient at parameter `p`.
     fn gradient(&self, p: &Self::Param) -> Result<Self::Gradient, Error> {            
         let grad = FiniteDiff::forward_diff(p, &{|x| self.array_norm_func(x)});
@@ -620,9 +617,9 @@ impl Gradient for FindingR<'_> {
 }
 
 impl Hessian for FindingR<'_> {
-    type Param = Array1<FLO>;
+    type Param = Array1<Flo>;
     /// Type of the gradient
-    type Hessian = Array2<FLO>;
+    type Hessian = Array2<Flo>;
 
     /// Compute gradient of rosenbrock function
     fn hessian(&self, p: &Self::Param) -> Result<Self::Hessian, Error> {
@@ -642,38 +639,38 @@ impl Hessian for FindingR<'_> {
     }
 }
 
-fn error_in_f(chunk_size: NAB, len: usize, divisor_r: FLO, arr: &Vec<Vector6<FLO>>) -> FLO{ 
-    let mut avg_small_dist: FLO = 0.0;
-    let (sender_glo, receiver): (Sender<FLO>, Receiver<FLO>) = channel();
-    let max_clique = chunk_clique(chunk_size, &(0..(len as NAB)).collect::<Vec<NAB>>(), arr, divisor_r, 2);
-    let vals = get_qs(max_clique.clone(), &arr);
+fn error_in_f(chunk_size: Nab, len: usize, divisor_r: Flo, arr: &Vec<Vector6<Flo>>) -> Flo{ 
+    let mut avg_small_dist: Flo = 0.0;
+    let (sender_glo, receiver): (Sender<Flo>, Receiver<Flo>) = channel();
+    let max_clique = chunk_clique(chunk_size, &(0..(len as Nab)).collect::<Vec<Nab>>(), arr, divisor_r, 2);
+    let vals = get_qs(max_clique, arr);
+    let arr4 = arr.iter().map(coords).collect::<Vec<Vector4<Flo>>>();
     // vals.0 = vals.0.iter().map(|v| v/divisor_r).collect();
     let func = define_f(&vals.0, &vals.1, &divisor_r);
-    arr.into_par_iter().skip(len-1000).for_each_with(sender_glo,|sender, p| {
-        sender.send(match_to_input(&vals.0, &func, &coords(&p), divisor_r)).unwrap();
+    arr.into_par_iter().skip(len-100).for_each_with(sender_glo,|sender, p| {
+        sender.send(match_to_input(&arr4, &func, &coords(p), divisor_r)).unwrap();
     });
-    for _ in 0..1000 {
+    for _ in 0..100 {
         let results = receiver.recv().unwrap();
         avg_small_dist += results;
-        drop(results);
     }
-    avg_small_dist /= 1000.0;// as FLO;
-    println!("Final avg dist is {}", avg_small_dist);
+    avg_small_dist /= 100.0;// as FLO;
+    println!("Final avg dist is {avg_small_dist}");
     avg_small_dist
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let mut chunk_size: NAB = 0;
-    let mut divisor_r: FLO = 1.0;
+    let mut chunk_size: Nab = 0;
+    let mut divisor_r: Flo = 1.0;
 
     match args.len() {
         1 => println!("Give me a file!"),
         2 => (), //corresponds to just a filename so then we don't chunk
-        3 => chunk_size = args[2].parse::<usize>().unwrap() as NAB,
+        3 => chunk_size = args[2].parse::<usize>().unwrap() as Nab,
         _ => {
-            chunk_size = args[2].parse::<usize>().unwrap() as NAB; 
-            divisor_r = args[3].parse::<FLO>().unwrap();
+            chunk_size = args[2].parse::<usize>().unwrap() as Nab; 
+            divisor_r = args[3].parse::<Flo>().unwrap();
             }
     }
     println!("We are choosing r to be {}", divisor_r);
@@ -695,7 +692,7 @@ fn main() {
     }
     else {
         println!("We are in non-chunking mode");
-        chunk_size = len as NAB + 1;
+        chunk_size = len as Nab + 1;
     }
 
     error_in_f(chunk_size, len, divisor_r, &arr);
