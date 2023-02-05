@@ -42,7 +42,7 @@ impl PmcGraph {
         let mut edges: Vec<Nab> = Vec::with_capacity(edgs.len() * 2);
         //let mut vert_list: AdjMtx = AdjMtx::new();
         //let mut current_start_vert: NAB = edgs[0].0;
-        let mut now: std::time::Instant = std::time::Instant::now();
+        //let mut now: std::time::Instant = std::time::Instant::now();
 
         let vertlen = verts.len();
         let backup_verts = verts.clone();
@@ -71,11 +71,11 @@ impl PmcGraph {
             edges.extend(&vert_enum[&ver].1);
             vertices.push(edges.len());
         }
-        let mut elapsed_time = now.elapsed();
-        println!(
-            "\tBuilding the graph struct from input took {} milliseconds.",
-            elapsed_time.as_millis()
-        );
+        //let mut elapsed_time = now.elapsed();
+        // println!(
+        //     "\tBuilding the graph struct from input took {} milliseconds.",
+        //     elapsed_time.as_millis()
+        // );
         let n = vertices.len();
         let mut g = PmcGraph {
             vertices,
@@ -89,9 +89,9 @@ impl PmcGraph {
             kcore_order: vec![],
         };
         g.vertex_degrees();
-        now = std::time::Instant::now();
+        //now = std::time::Instant::now();
         g.compute_cores();
-        elapsed_time = now.elapsed();
+        //elapsed_time = now.elapsed();
         // println!(
         //     "\tComputing cores took {} milliseconds.",
         //     elapsed_time.as_millis()
@@ -345,19 +345,3 @@ impl PmcGraph {
         }
     }
 }
-
-// #[derive(Default, Clone, Debug, Eq, PartialEq)]
-// pub struct Vertex {
-//     id: usize,
-//     b: usize,
-// }
-// impl Ord for Vertex {
-//     fn cmp(&self, other: &Self) -> Ordering {
-//         (self.b).cmp(&other.b)
-//     }
-// }
-// impl PartialOrd for Vertex {
-//     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-//         Some(self.cmp(other))
-//     }
-// }

@@ -1,7 +1,7 @@
-use argmin::core::{CostFunction, Error, Executor, Gradient, Hessian, State};
+use argmin::core::{CostFunction, Error, Executor, Gradient, Hessian};
 use argmin::solver::quasinewton::SR1TrustRegion;
 //use plotters::prelude::*;
-use argmin::solver::trustregion::{CauchyPoint, TrustRegion};
+use argmin::solver::trustregion::CauchyPoint;
 use finitediff::FiniteDiff;
 use na::{Matrix4, Vector4, Vector6};
 use nalgebra as na;
