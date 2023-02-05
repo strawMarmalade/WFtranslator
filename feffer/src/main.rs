@@ -788,7 +788,7 @@ fn main() {
     let name = file_path.chars().skip(skip).collect::<String>();
     println!("DataFile  , #Points  , ChunkSize, #TestedPo, MaxIter  , divisor_r, DeltaMut , AvgDist   , Time     ");
 
-
+    //start r at 1000.0
     for r in 1..=20{
         let now3 = std::time::Instant::now();
         divisor_r = 1000.0+(r as Flo)*50.0;
@@ -799,10 +799,11 @@ fn main() {
             divisor_r,
             2,
         );
+        println!("At next r, and it took {}s to get the func", now3.elapsed().as_millis());
+        println!("Clique of len {} is {:?}", max_clique.len(), max_clique);
         let vals = get_qs(max_clique, &arr);
         // vals.0 = vals.0.iter().map(|v| v/divisor_r).collect();
         let func = define_f(&vals.0, &vals.1, &divisor_r);
-        println!("At next r, and it took {}s to get the func", now3.elapsed().as_secs());
         for l in 1..=7 {
             for k in 1..10 {
                 let now2 = std::time::Instant::now();

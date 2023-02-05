@@ -72,10 +72,10 @@ impl PmcGraph {
             vertices.push(edges.len());
         }
         let mut elapsed_time = now.elapsed();
-        // println!(
-        //     "\tBuilding the graph struct from input took {} milliseconds.",
-        //     elapsed_time.as_millis()
-        // );
+        println!(
+            "\tBuilding the graph struct from input took {} milliseconds.",
+            elapsed_time.as_millis()
+        );
         let n = vertices.len();
         let mut g = PmcGraph {
             vertices,
@@ -246,7 +246,7 @@ impl PmcGraph {
                         /* I keep the old value, let the branch function modify
                         a copy of it */
                         let mut mc_cur_mut = mc_cur;
-                        self.branch(&pairs, 1, &mut mc_cur_mut, &mut clique);
+                        self.branch(pairs, 1, &mut mc_cur_mut, &mut clique);
                         /* If this branch func did better than before, send this to the receiver */
                         if mc_cur_mut > mc_cur {
                             clique.push(v);
@@ -284,7 +284,7 @@ impl PmcGraph {
         c_max
     }
 
-    pub fn branch(&self, pairs: &Vec<(Nab, Nab)>, sz: Nab, mc: &mut Nab, cliq: &mut Vec<Nab>) {
+    pub fn branch(&self, pairs: Vec<(Nab, Nab)>, sz: Nab, mc: &mut Nab, cliq: &mut Vec<Nab>) {
         if !pairs.is_empty() {
             let u = pairs[pairs.len() - 1].0;
             let verts = &self.vertices;
@@ -332,10 +332,10 @@ impl PmcGraph {
             }
 
             drop(ind);
-            //drop(pairs);
+            drop(pairs);
 
             let mc_prev = *mc;
-            self.branch(&remain, sz + 1, mc, cliq);
+            self.branch(remain, sz + 1, mc, cliq);
 
             if *mc > mc_prev {
                 cliq.push(u);
