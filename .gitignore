@@ -5,7 +5,7 @@ pmc*
 feffer/matrix*
 feffer/max-clique
 feffer/dataMat*
-Heu*.txt
+*Heu*.txt
 Full*.txt
 .ipynb_checkpoints
 __pycache__
