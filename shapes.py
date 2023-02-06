@@ -637,17 +637,17 @@ def generateWFData(amount = 100, N=201):
         WFSetList = ellipseToWFsetList(shape, gridSize=N, angleAccuracy=360)
         WF = dim3WFList(WFSetList)
         SinoWF = dim3getSinoWFFromList(WFSetList, N=N)
-        arr = [np.concatenate(np.array([SinoWF[j], WF[j]])) for j in range(len(WF))]
+        arr = [np.array([SinoWF[j][0], SinoWF[j][1], WF[j][0], WF[j][1], SinoWF[j][2], WF[j][2]]) for j in range(len(WF))]
         WFData.extend(arr)
     return np.array(WFData)
 
-seed = 73
+seed = 68
 np.random.seed(seed)
 
-amount = 2
+amount = 18
 
 data = generateWFData(amount=amount)
-np.savetxt(f"Heu{amount}_{seed}.txt", data, delimiter=' ', newline='\n', fmt='%d')
+np.savetxt(f"nHeu{amount}_{seed}.txt", data, delimiter=' ', newline='\n', fmt='%d')
 # edgs = []
 
 

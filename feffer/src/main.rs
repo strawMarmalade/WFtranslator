@@ -2,8 +2,8 @@ use argmin::core::Executor;
 use argmin::solver::quasinewton::SR1TrustRegion;
 //use plotters::prelude::*;
 use argmin::solver::trustregion::CauchyPoint;
-use na::{Matrix4, Vector4, Vector6};
 use nalgebra as na;
+use na::{Matrix4, Vector4, Vector6};
 use ndarray::Array1;
 use rayon::prelude::*;
 use std::env;
@@ -16,11 +16,6 @@ use std::sync::mpsc::{Receiver, Sender};
 mod pmcgraph;
 mod minimizers;
 use crate::minimizers::FindingR;
-//mod graph;
-//mod backtracking;
-//mod branch_and_bound;
-
-//use crate::graph::Graph;
 use crate::pmcgraph::PmcGraph;
 
 type Nab = u32;
@@ -30,6 +25,13 @@ const DELTAMOD: Flo = 0.001;//0.0016; //want C_{18}n\delta < C_{18}n 1/(n*20) = 
 
 fn mu(x_point: &Vector4<Flo>, q_point: &Vector4<Flo>) -> Flo {
     let dist: Flo = (x_point - q_point).norm();
+    //println!("{}", dist);
+    if 3.0*dist <= 1.01 {
+        return 1.0;
+    }
+    else if 2.0*dist >= 1.01 {
+        return 0.0;
+    }
     (1.0 / (dist - 1.0 / 3.0)).exp()
         / ((1.0 / (dist - 1.0 / 3.0)).exp() + (1.0 / (1.0 / 2.0 - dist)).exp())
 }
@@ -273,8 +275,8 @@ fn get_qs(max_clique: Vec<Nab>, points: &[Vector6<Flo>]) -> (Vec<Vector4<Flo>>, 
 
 fn proj_from_normal(point: Vector6<Flo>) -> Matrix4<Flo> {
     let normal: Vector4<Flo> = Vector4::from_vec(vec![
-        Flo::cos(PI * point[2] / 180.0),
-        Flo::sin(PI * point[2] / 180.0),
+        Flo::cos(PI * point[4] / 180.0),
+        Flo::sin(PI * point[4] / 180.0),
         -Flo::cos(PI * point[5] / 180.0),
         -Flo::sin(PI * point[5] / 180.0),
     ]);
@@ -313,8 +315,8 @@ fn proj_from_normal(point: Vector6<Flo>) -> Matrix4<Flo> {
 fn chunk_clique(
     chunk_size: u32,
     verts: Vec<Nab>,
-    arr: &[Vector6<Flo>],
-    divisor_r: Flo,
+    arr: &[Vector4<Flo>],
+    //divisor_r: Flo,
     increase_factor: u32,
 ) -> Vec<Nab> {
     let mut collected_verts: Vec<Nab> = vec![];
@@ -327,28 +329,37 @@ fn chunk_clique(
         let mut edgs: Vec<(Nab, Nab)> = vec![];
         for j in 0..chunk_len {
             for k in 0..j {
-                if 100.0 * (coords(&(arr[chunk[j] as usize] - arr[chunk[k] as usize]))).norm()
-                    >= divisor_r
+                if (&(arr[chunk[j] as usize] - arr[chunk[k] as usize])).norm()
+                    >= 1.0/100.0
                 {
                     edgs.push((chunk[j] as Nab, chunk[k] as Nab));
                 }
             }
         }
+
         // println!(
         //     "\tWe have #verts= {}, #edges={}, density={}.",
         //     chunk_len,
         //     edgs.len(),
         //     ((2 * edgs.len()) as Flo) / ((chunk_len as Flo) * (chunk_len - 1) as Flo)
         // );
+        if chunk_len*(chunk_len-1)/2 as usize == edgs.len()
+        {
+            println!("All are 1/100 distant");
+            collected_verts.extend(chunk);
+        }
+        else {
+            println!("Not all are 1/100 distant");
+            let graph = PmcGraph::new(chunk.to_vec(), edgs);
+            //let now2 = std::time::Instant::now();
+            collected_verts.extend(
+                graph
+                    .search_bounds()
+                    .into_iter()
+                    .map(|val| chunk[val as usize]),
+            );
+        }
 
-        let graph = PmcGraph::new(chunk.to_vec(), edgs);
-        //let now2 = std::time::Instant::now();
-        collected_verts.extend(
-            graph
-                .search_bounds()
-                .into_iter()
-                .map(|val| chunk[val as usize]),
-        );
         //let elapsed_time = now2.elapsed();
         // println!(
         //     "\tIt took {} milliseconds to compute the clique\n",
@@ -362,7 +373,7 @@ fn chunk_clique(
         chunk_size * increase_factor,
         collected_verts,
         arr,
-        divisor_r,
+        //divisor_r,
         increase_factor,
     )
 }
@@ -382,13 +393,13 @@ fn read_file_to_mat(file_path: &String) -> Vec<Vector6<Flo>> {
 }
 
 fn coords(point: &Vector6<Flo>) -> Vector4<Flo> {
-    Vector4::from_vec(vec![point[0], point[1], point[3], point[4]])
+    Vector4::from_vec(vec![point[0], point[1], point[2], point[3]])
 }
 
 fn define_f<'a>(
     arr_at_clique: &'a [Vector4<Flo>],
     mats: &'a [Matrix4<Flo>],
-    divisor_r: &'a Flo,
+    //divisor_r: Flo,
 ) -> Box<dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync> {
     /*
     The code below is the rust equivalent of this python code:
@@ -404,22 +415,22 @@ fn define_f<'a>(
             y = phi(y)
         return y
     */
-    let projs = arr_at_clique
-        .iter()
-        .map(|a| a / *divisor_r)
-        .zip(mats)
-        .map(|(arr, mat)| move |y: Vector4<Flo>| (mat * y + arr, mu(&y, &arr)));
-    let phis =
-        projs.map(|func| move |y: Vector4<Flo>| func(y).1 * func(y).0 + (1.0 - func(y).1) * y);
-    //phis.clone().fold(Vector4::from_vec(vec![58.0, 112.0, 166.0, 54.0]), move|acc, phi| {println!("{:?}",phi(acc)); phi(acc)});
-    //phis.clone().fold(Vector4::from_vec(vec![138.0, 104.0, 71.0, 142.0]), move|acc, phi| {println!("{:?}",phi(acc)); phi(acc)});
     Box::new(move |y: Vector4<Flo>| {
-        phis.clone()
-            .fold(y, move |acc, phi| {
+        arr_at_clique
+        .iter()
+        .zip(mats)
+        .map(|(arr, mat)| move |y: Vector4<Flo>|
+            {
+                let m = mu(&y, &arr);
+                //println!("{}", (y-arr).norm());
+                //println!("{}, {}",y, m* (mat * (y-arr) + arr) + (1.0- m)*y);
+                m* (mat * (y-arr) + arr) + (1.0- m)*y
+            })
+        .fold(y, move |acc, phi| 
+            {
                 //print!("{}",phi(acc));
                 phi(acc)
             })
-            .map(|v| v * *divisor_r)
     })
 }
 
@@ -658,7 +669,7 @@ fn error_in_f<'a>(arr4: &[Vector4<Flo>], divisor_r: Flo, delta_mult: Flo, max_it
             let ret = match_to_input(&arr4, cost, divisor_r, delta_mult, max_iter);
             // println!(
             //     "When trying to find {}, we instead found {}",
-            //     &coords(p),
+            //     p,
             //     func(ret.1)
             // );
             sender.send(ret.0).unwrap();
@@ -670,6 +681,10 @@ fn error_in_f<'a>(arr4: &[Vector4<Flo>], divisor_r: Flo, delta_mult: Flo, max_it
     avg_small_dist /= amount as Flo;
     //println!("Final avg dist is {avg_small_dist}");
     avg_small_dist
+}
+
+fn divide(arr: Vector6<Flo>, divisor: Flo) -> Vector6<Flo> {
+    Vector6::from_vec(vec![arr[0]/divisor, arr[1]/divisor, arr[2]/divisor, arr[3]/divisor, arr[4], arr[5]])
 }
 
 fn main() {
@@ -687,14 +702,26 @@ fn main() {
         }
     }
     //println!("We are choosing r to be {divisor_r}");
+    let mut now: std::time::Instant = std::time::Instant::now();
     let file_path = &args[1];
 
-    let now = std::time::Instant::now();
-    let arr = read_file_to_mat(file_path);
+    let mut arr = read_file_to_mat(file_path);
+    let mut len = arr.len();
+    //array is sorted beforehand and full duplicates are already removed. If, however, the coordinates
+    //are the same, but angles are different by 1 or so due to machine erros, we deduplicate them here
+    //dedup
+    let mut k: usize = 0;
+    while k < len-1 {
+        if arr[k][0]==arr[k+1][0] && arr[k][1]==arr[k+1][1] && arr[k][2]==arr[k+1][2] && arr[k][3]==arr[k+1][3] {
+            arr.remove(k+1);
+            len -= 1;
+        }
+        else {
+            k +=1;
+        }
+    }
     //find_r(&arr);
 
-    let mut elapsed_time = now.elapsed();
-    let len = arr.len();
     // println!(
     //     "Reading the file of points took {} milliseconds and we have {} many points",
     //     elapsed_time.as_millis(),
@@ -707,40 +734,58 @@ fn main() {
         chunk_size = len as Nab + 1;
     }
 
-    let file_len = file_path.len();
-    let mut skip = 0;
-    if file_len > 10 {
-        skip = file_len-10;
-    }
-    let name = file_path.chars().skip(skip).collect::<String>();
-    println!("DataFile  , #Points  , ChunkSize, #TestedPo, MaxIter  , divisor_r, DeltaMut , AvgDist   , Time     ");
+    // let file_len = file_path.len();
+    // let mut skip = 0;
+    // if file_len > 10 {
+    //     skip = file_len-10;
+    // }
+    // let name = file_path.chars().skip(skip).collect::<String>();
+    // println!("DataFile  , #Points  , ChunkSize, #TestedPo, MaxIter  , divisor_r, DeltaMut , AvgDist   , Time     ");
 
-    //start r at 1000.0
-    for r in 1..=20{
-        let now3 = std::time::Instant::now();
-        divisor_r = 1000.0+(r as Flo)*50.0;
-        let max_clique = chunk_clique(
-            chunk_size,
-            (0..(len as Nab)).collect::<Vec<Nab>>(),
-            &arr,
-            divisor_r,
-            2,
-        );
-        let vals = get_qs(max_clique, &arr);
-        // vals.0 = vals.0.iter().map(|v| v/divisor_r).collect();
-        let func = define_f(&vals.0, &vals.1, &divisor_r);
-        println!("At next r, and it took {}s to get the func", now3.elapsed().as_secs());
-        let arr4 = arr.iter().map(coords).collect::<Vec<Vector4<Flo>>>();
+    // //start r at 1000.0
+    // for r in 1..=20{
+    //     let now3 = std::time::Instant::now();
+    //     divisor_r = 1000.0+(r as Flo)*50.0;
+    //     let max_clique = chunk_clique(
+    //         chunk_size,
+    //         (0..(len as Nab)).collect::<Vec<Nab>>(),
+    //         &arr,
+    //         divisor_r,
+    //         2,
+    //     );
+    //     let vals = get_qs(max_clique, &arr);
+    //     // vals.0 = vals.0.iter().map(|v| v/divisor_r).collect();
+    //     let func = define_f(&vals.0, &vals.1, &divisor_r);
+    //     println!("At next r, and it took {}s to get the func", now3.elapsed().as_secs());
+    //     let arr4 = arr.iter().map(coords).collect::<Vec<Vector4<Flo>>>();
 
-        for l in 1..=7 {
-            for k in 1..15 {
-                let now2 = std::time::Instant::now();
-                let err = error_in_f(&arr4, divisor_r, k as Flo, 10*l, &func);
-                println!("{name:10},{len:10},{chunk_size:10},       127,{:10},{divisor_r:10},{k:10},{err:.2},{:9}s", 10*l, now2.elapsed().as_secs());
-            }
-            println!(" ");
-        }
-    }
+    //     for l in 1..=7 {
+    //         for k in 1..17 {
+    //             let now2 = std::time::Instant::now();
+    //             let err = error_in_f(&arr4, divisor_r, k as Flo, 10*l, &func);
+    //             println!("{name:>10},{len:>10},{chunk_size:>10},       127,{:>10},{divisor_r:>10},{k:>10}, {:>10},{:>9}s", 10*l,format!("{:.2}", err), now2.elapsed().as_secs());
+    //         }
+    //         println!(" ");
+    //     }
+    // }
+
+    //divisor_r = 200.0;
+    let arr_div = arr.iter().map(|a| divide(*a, divisor_r)).collect::<Vec<Vector6<Flo>>>(); 
+    
+    let arr4 = arr_div.iter().map(coords).collect::<Vec<Vector4<Flo>>>();
+
+    let max_clique = chunk_clique(
+        chunk_size,
+        (0..(len as Nab)).collect::<Vec<Nab>>(),
+        &arr4,
+        //divisor_r,
+        2,
+    );
+    let vals = get_qs(max_clique, &arr_div);
+    // vals.0 = vals.0.iter().map(|v| v/divisor_r).collect();
+    println!("{}", vals.0[0]*divisor_r);
+    let func = define_f(&vals.0, &vals.1);
+    println!("{}", func(vals.0[0])*divisor_r);
 
     //let point_to_find = coords(&arr[21]);//8
 
@@ -816,6 +861,6 @@ fn main() {
     //     writeln!(output, "{:?}", val).unwrap();
     // }
 
-    elapsed_time = now.elapsed();
+    let elapsed_time = now.elapsed();
     println!("The total process took {} seconds.", elapsed_time.as_secs());
 }
