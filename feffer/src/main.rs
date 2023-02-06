@@ -1,11 +1,10 @@
-use argmin::core::{CostFunction, Error, Executor, Gradient, Hessian};
+use argmin::core::Executor;
 use argmin::solver::quasinewton::SR1TrustRegion;
 //use plotters::prelude::*;
 use argmin::solver::trustregion::CauchyPoint;
-use finitediff::FiniteDiff;
 use na::{Matrix4, Vector4, Vector6};
 use nalgebra as na;
-use ndarray::{Array1, Array2};
+use ndarray::Array1;
 use rayon::prelude::*;
 use std::env;
 use std::f64::consts::PI;
@@ -15,6 +14,8 @@ use std::sync::mpsc::channel;
 use std::sync::mpsc::{Receiver, Sender};
 
 mod pmcgraph;
+mod minimizers;
+use crate::minimizers::FindingR;
 //mod graph;
 //mod backtracking;
 //mod branch_and_bound;
@@ -24,7 +25,7 @@ use crate::pmcgraph::PmcGraph;
 
 type Nab = u32;
 type Flo = f64;
-const DELTAMOD: Flo = 0.016; //want C_{18}n\delta < C_{18}n 1/(n*20) = 6/20
+const DELTAMOD: Flo = 0.001;//0.0016; //want C_{18}n\delta < C_{18}n 1/(n*20) = 6/20
                                 //const DIV: FLO = 1.0;//1.0;
 
 fn mu(x_point: &Vector4<Flo>, q_point: &Vector4<Flo>) -> Flo {
@@ -425,6 +426,7 @@ fn define_f<'a>(
     })
 }
 
+/* 
 #[derive(Clone)]
 struct FuncToMin<'a> {
     point_to_find: &'a Vector4<Flo>,
@@ -519,7 +521,6 @@ impl Hessian for FuncToMin<'_> {
     }
 }
 
-/*
 fn solve<'a>(
     points_at_clique: &[Vector4<Flo>],
     func: &'a (dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync),
@@ -585,7 +586,7 @@ fn solve<'a>(
 
 fn match_to_input(
     points_at_clique: &[Vector4<Flo>],
-    cost: &FindingR, //func: &'a(dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync), point_to_find: &Vector4<Flo>,
+    cost: FindingR, //func: &'a(dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync), point_to_find: &Vector4<Flo>,
     divisor_r: Flo,
     delta_mult: Flo,
     max_iters: usize,
@@ -644,80 +645,10 @@ fn match_to_input(
     (best_val, best_param)
 }
 
-#[derive(Clone)]
-struct FindingR<'a> {
-    point_to_find: &'a Vector4<Flo>,
-    fun: &'a (dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync),
-}
-
-impl FindingR<'_> {
-    fn norm_func(&self, p: &Vector4<Flo>) -> Flo {
-        ((self.fun)(*p) - self.point_to_find).norm()
-        // FLO::sqrt(
-        //     ((self.fun)(*p)[0]-self.point_to_find[0]).powi(2)+((self.fun)(*p)[1]-self.point_to_find[1]).powi(2)
-        // )
-        //((self.fun)(*p) - self.point_to_find).norm()
-    }
-    fn array_norm_func(&self, y: &Array1<Flo>) -> Flo {
-        self.norm_func(&Vector4::from_column_slice(y.as_slice().unwrap()))
-    }
-    // fn array_gradient(&self, y: &Array1<FLO>) -> Array1<FLO> {
-    //     self.gradient(&Vector4::from_column_slice(y.as_slice().unwrap())).unwrap()
-    // }
-}
-
-impl CostFunction for FindingR<'_> {
-    /// Type of the parameter vector
-    type Param = Array1<Flo>;
-    /// Type of the return value computed by the cost function
-    type Output = Flo;
-    /// Apply the cost function to a parameter `p`
-    fn cost(&self, p: &Self::Param) -> Result<Self::Output, Error> {
-        //print!("{} ", self.norm_func(p));
-        Ok(self.array_norm_func(p))
-    }
-}
-
-impl Gradient for FindingR<'_> {
-    /// Type of the parameter vector
-    type Param = Array1<Flo>;
-    /// Type of the gradient
-    type Gradient = Array1<Flo>;
-    /// Compute the gradient at parameter `p`.
-    fn gradient(&self, p: &Self::Param) -> Result<Self::Gradient, Error> {
-        let grad = FiniteDiff::forward_diff(p, &{ |x| self.array_norm_func(x) });
-        //println!("{}", grad);
-        Ok(grad)
-        //Ok(Vector4::from_column_slice(grad.as_slice().unwrap()))
-    }
-}
-
-impl Hessian for FindingR<'_> {
-    type Param = Array1<Flo>;
-    /// Type of the gradient
-    type Hessian = Array2<Flo>;
-
-    /// Compute gradient of rosenbrock function
-    fn hessian(&self, p: &Self::Param) -> Result<Self::Hessian, Error> {
-        //let func2 = {|y: &Array1<FLO>| self.norm_func(Vector4::from_column_slice(y.as_slice().unwrap()))};
-        let grad = FiniteDiff::forward_hessian(p, &{ |x| self.gradient(x).unwrap() }); //self.array_norm_func(x.clone()) });
-        //let grad = FiniteDiff::forward_hessian_nograd(&y, &func2);
-        //println!("{}", grad);
-        Ok(grad)
-        // Ok(Matrix4::new(
-        //     grad[(0,0)], grad[(0,1)], grad[(0,2)],grad[(0,3)],
-        //     grad[(1,0)], grad[(1,1)], grad[(1,2)],grad[(1,3)],
-        //     grad[(2,0)], grad[(2,1)], grad[(2,2)],grad[(2,3)],
-        //     grad[(3,0)], grad[(3,1)], grad[(3,2)],grad[(3,3)],
-        // ))
-        //Ok(Matrix4::from_column_slice(grad.as_slice().unwrap()))
-        //Ok(rosenbrock_2d_hessian(param, 1.0, 100.0))
-    }
-}
 
 fn error_in_f<'a>(arr: &[Vector6<Flo>], divisor_r: Flo, delta_mult: Flo, max_iter: usize, func: &'a (dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync)) -> Flo {
     let mut avg_small_dist: Flo = 0.0;
-    let amount: usize = 100;
+    let amount: usize = 127;
     let (sender_glo, receiver): (Sender<Flo>, Receiver<Flo>) = channel();
     let arr4 = arr.iter().map(coords).collect::<Vec<Vector4<Flo>>>();
 
@@ -728,7 +659,7 @@ fn error_in_f<'a>(arr: &[Vector6<Flo>], divisor_r: Flo, delta_mult: Flo, max_ite
                 point_to_find: &coords(p),
                 fun: func,
             };
-            let ret = match_to_input(&arr4, &cost, divisor_r, delta_mult, max_iter);
+            let ret = match_to_input(&arr4, cost, divisor_r, delta_mult, max_iter);
             // println!(
             //     "When trying to find {}, we instead found {}",
             //     &coords(p),
@@ -799,16 +730,15 @@ fn main() {
             divisor_r,
             2,
         );
-        println!("At next r, and it took {}s to get the func", now3.elapsed().as_millis());
-        println!("Clique of len {} is {:?}", max_clique.len(), max_clique);
         let vals = get_qs(max_clique, &arr);
         // vals.0 = vals.0.iter().map(|v| v/divisor_r).collect();
         let func = define_f(&vals.0, &vals.1, &divisor_r);
+        println!("At next r, and it took {}s to get the func", now3.elapsed().as_secs());
         for l in 1..=7 {
-            for k in 1..10 {
+            for k in 1..15 {
                 let now2 = std::time::Instant::now();
                 let err = error_in_f(&arr, divisor_r, k as Flo, 10*l, &func);
-                println!("{name:10},{len:10},{chunk_size:10},       100,{:10},{divisor_r:10},{k:10},{err:7.2},{:9}s", 10*l, now2.elapsed().as_secs());
+                println!("{name:10},{len:10},{chunk_size:10},       127,{:10},{divisor_r:10},{k:10},{err:.2},{:9}s", 10*l, now2.elapsed().as_secs());
             }
             println!(" ");
         }

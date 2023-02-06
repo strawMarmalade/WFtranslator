@@ -1,6 +1,6 @@
 /*
 This code is based on https://github.com/ryanrossi/pmc and has just been
-reimplemented in rust
+reimplemented in rust with a performance increase of around 150%.
 */
 use parking_lot::RwLock;
 use rayon::prelude::*;
@@ -324,10 +324,8 @@ impl PmcGraph {
 
             let mut remain: Vec<(Nab, Nab)> = vec![];
             for i in 0..pairs.len() {
-                if ind[pairs[i].0 as usize] {
-                    if kcores[pairs[i].0 as usize] > *mc {
-                        remain.push(pairs[i]);
-                    }
+                if ind[pairs[i].0 as usize] && kcores[pairs[i].0 as usize] > *mc {
+                    remain.push(pairs[i]);
                 }
             }
 
