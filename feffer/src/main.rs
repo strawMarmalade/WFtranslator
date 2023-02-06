@@ -267,10 +267,7 @@ fn get_qs(max_clique: Vec<Nab>, points: &[Vector6<Flo>]) -> (Vec<Vector4<Flo>>, 
     let points_clone = points_q.clone().map(|q| coords(&q));
     //let x_ones = points_q.clone().map(|q| ball_rad_r(&q, points,  40.0));
     //let spaces_q = points_q.zip(x_ones).map(|(q,x)| na::Matrix6x4::from_columns(&find_disc(&q, &x, 4).unwrap()));
-    let projs = points_q.map(proj_from_normal); //spaces_q
-                                                //.map(|mat|
-                                                //    na::linalg::QR::new(mat).q())
-                                                //    .map(|q| q*q.transpose());
+    let projs = points_q.map(proj_from_normal); //
     (points_clone.collect(), projs.collect())
 }
 
@@ -315,7 +312,7 @@ fn proj_from_normal(point: Vector6<Flo>) -> Matrix4<Flo> {
 
 fn chunk_clique(
     chunk_size: u32,
-    verts: &[Nab],
+    verts: Vec<Nab>,
     arr: &[Vector6<Flo>],
     divisor_r: Flo,
     increase_factor: u32,
@@ -363,7 +360,7 @@ fn chunk_clique(
     }
     chunk_clique(
         chunk_size * increase_factor,
-        &collected_verts,
+        collected_verts,
         arr,
         divisor_r,
         increase_factor,
@@ -586,7 +583,7 @@ fn solve<'a>(
 
 fn match_to_input(
     points_at_clique: &[Vector4<Flo>],
-    cost: FindingR, //func: &'a(dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync), point_to_find: &Vector4<Flo>,
+    cost: FindingR, 
     divisor_r: Flo,
     delta_mult: Flo,
     max_iters: usize,
@@ -646,17 +643,16 @@ fn match_to_input(
 }
 
 
-fn error_in_f<'a>(arr: &[Vector6<Flo>], divisor_r: Flo, delta_mult: Flo, max_iter: usize, func: &'a (dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync)) -> Flo {
+fn error_in_f<'a>(arr4: &[Vector4<Flo>], divisor_r: Flo, delta_mult: Flo, max_iter: usize, func: &'a (dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync)) -> Flo {
     let mut avg_small_dist: Flo = 0.0;
     let amount: usize = 127;
     let (sender_glo, receiver): (Sender<Flo>, Receiver<Flo>) = channel();
-    let arr4 = arr.iter().map(coords).collect::<Vec<Vector4<Flo>>>();
 
-    arr.into_par_iter()
+    arr4.par_iter()
         .skip(arr4.len() - amount)
         .for_each_with(sender_glo, |sender, p| {
             let cost = FindingR {
-                point_to_find: &coords(p),
+                point_to_find: &p,
                 fun: func,
             };
             let ret = match_to_input(&arr4, cost, divisor_r, delta_mult, max_iter);
@@ -725,7 +721,7 @@ fn main() {
         divisor_r = 1000.0+(r as Flo)*50.0;
         let max_clique = chunk_clique(
             chunk_size,
-            &(0..(len as Nab)).collect::<Vec<Nab>>(),
+            (0..(len as Nab)).collect::<Vec<Nab>>(),
             &arr,
             divisor_r,
             2,
@@ -734,10 +730,12 @@ fn main() {
         // vals.0 = vals.0.iter().map(|v| v/divisor_r).collect();
         let func = define_f(&vals.0, &vals.1, &divisor_r);
         println!("At next r, and it took {}s to get the func", now3.elapsed().as_secs());
+        let arr4 = arr.iter().map(coords).collect::<Vec<Vector4<Flo>>>();
+
         for l in 1..=7 {
             for k in 1..15 {
                 let now2 = std::time::Instant::now();
-                let err = error_in_f(&arr, divisor_r, k as Flo, 10*l, &func);
+                let err = error_in_f(&arr4, divisor_r, k as Flo, 10*l, &func);
                 println!("{name:10},{len:10},{chunk_size:10},       127,{:10},{divisor_r:10},{k:10},{err:.2},{:9}s", 10*l, now2.elapsed().as_secs());
             }
             println!(" ");
