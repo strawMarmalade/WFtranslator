@@ -277,7 +277,7 @@ impl PmcGraph {
                     let mut _found_ub_mut = *found_ub_glo.write();
                     _found_ub_mut = true;
                 }
-                //println!("\tFound clique of len {}", c_max.len());
+                info!("Found clique of len {}", c_max.len());
             }
             drop(results);
         }

@@ -11,8 +11,14 @@ use std::env;
 use std::f64::consts::PI;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::{Receiver, Sender};
+#[macro_use] extern crate log;
+extern crate simplelog;
+use simplelog::*;
+
+use clap::Parser;
 
 mod pmcgraph;
 mod minimizers;
@@ -337,7 +343,6 @@ fn chunk_clique(
                 }
             }
         }
-
         // println!(
         //     "\tWe have #verts= {}, #edges={}, density={}.",
         //     chunk_len,
@@ -346,11 +351,11 @@ fn chunk_clique(
         // );
         if chunk_len*(chunk_len-1)/2 as usize == edgs.len()
         {
-            println!("All are 1/100 distant");
+            trace!("All pairs of points are 1/100 distant.");
             collected_verts.extend(chunk);
         }
         else {
-            println!("Not all are 1/100 distant");
+            trace!("Not all pairs of points are 1/100 distant.");
             let graph = PmcGraph::new(chunk.to_vec(), edgs);
             //let now2 = std::time::Instant::now();
             collected_verts.extend(
@@ -368,6 +373,7 @@ fn chunk_clique(
         // );
     }
     if chunk_amount == 1 {
+        trace!("Max clique of length {} was found: {:?}", collected_verts.len(), collected_verts);
         return collected_verts;
     }
     chunk_clique(
@@ -379,7 +385,7 @@ fn chunk_clique(
     )
 }
 
-fn read_file_to_mat(file_path: &String) -> Vec<Vector6<Flo>> {
+fn read_file_to_mat(file_path: PathBuf) -> Vec<Vector6<Flo>> {
     let f = BufReader::new(File::open(file_path).unwrap());
 
     f.lines()
@@ -400,7 +406,6 @@ fn coords(point: &Vector6<Flo>) -> Vector4<Flo> {
 fn define_f<'a>(
     arr_at_clique: &'a [Vector4<Flo>],
     mats: &'a [Matrix4<Flo>],
-    //divisor_r: Flo,
 ) -> Box<dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync> {
     /*
     The code below is the rust equivalent of this python code:
@@ -423,13 +428,10 @@ fn define_f<'a>(
         .map(|(arr, mat)| move |y: Vector4<Flo>|
             {
                 let m = mu(&y, &arr);
-                //println!("{}", (y-arr).norm());
-                //println!("{}, {}",y, m* (mat * (y-arr) + arr) + (1.0- m)*y);
                 m* (mat * (y-arr) + arr) + (1.0- m)*y
             })
         .fold(y, move |acc, phi| 
             {
-                //print!("{}",phi(acc));
                 phi(acc)
             })
     })
@@ -561,66 +563,43 @@ fn match_to_input(
     (best_val, best_param)
 }
 
-fn match_to_input2(
-    points_at_clique: &[Vector4<Flo>],
+fn find_point(
+    points: &[Vector4<Flo>],
     cost: FuncMin, 
     //divisor_r: Flo,
     delta_mult: Flo,
     max_iters: usize,
 ) -> (Flo, Vector4<Flo>) {
     let mut best_val: Flo = 10e10;
-    let mut best_param: Vector4<Flo> = Vector4::from_vec(vec![0.0, 0.0, 0.0, 0.0]);
+    let mut best_param: Array1<Flo> = Array1::from_vec(vec![0.0, 0.0, 0.0, 0.0]);
+    let (sender_glo, receiver): (Sender<(Flo,Array1<Flo>)>, Receiver<(Flo,Array1<Flo>)>) = channel();
+    let plen = points.len();
 
-    //MAKE THIS PARALLEL
-    for start in points_at_clique {
+    points.into_par_iter().for_each_with(sender_glo, |sender, start| {
         let star = Array1::from_vec(vec![start[0], start[1], start[2], start[3]]);
 
-        // let linesearch: BacktrackingLineSearch<Array1<FLO>, Array1<FLO>,_, FLO> = BacktrackingLineSearch::new(ArmijoCondition::new(0.0001f64).unwrap());
-        //     //.with_bounds(divisor_r*DELTA/500.0,divisor_r*DELTA/10.0).unwrap();
-        // let cp: DFP<_, FLO> = argmin::solver::quasinewton::DFP::new(linesearch);
-        // let inv_hessian: Array2<FLO> = Array2::eye(4);
-        //let state = IterState::new()
-        // .param(star)
-        // .inv_hessian(inv_hessian);
-        // //let tr = TrustRegion::new(cp).with_max_radius(divisor_r*DELTA).unwrap().with_radius(divisor_r*DELTA/100.0).unwrap();
-        // let (mut state_out, kv) = cp.init(&mut Problem::new(cost), state).unwrap();
         let cp: CauchyPoint<Flo> = argmin::solver::trustregion::CauchyPoint::new();
-
         let sr1: SR1TrustRegion<_, f64> = SR1TrustRegion::new(cp).with_radius(delta_mult*DELTAMOD);
+
         let res = Executor::new(cost.clone(), sr1)
             .configure(|state| state.param(star).max_iters(max_iters as u64))
             // run the solver on the defined problem
             .run()
             .unwrap();
-        let best_res = res.state().best_cost;
-        if best_res < best_val {
-            best_val = best_res;
-            best_param = Vector4::from_column_slice(
-                res.state().best_param.as_ref().unwrap().as_slice().unwrap(),
-            );
+        //let para = Vector4::from_column_slice(
+        //        res.state().best_param.as_ref().unwrap().as_slice().unwrap());
+        sender.send((res.state().best_cost,res.state.best_param.unwrap())).unwrap();
+
+    });
+    for _ in 0..plen {
+        let results = receiver.recv().unwrap();
+        if results.0 < best_val {
+            best_val = results.0;
+            debug!("We've found our new best guess with distance {}", best_val);
+            best_param = results.1;
         }
     }
-    //     let cost = FindingR {point_to_find, fun: func};
-
-    // for start in points_at_clique {
-
-    //     let cp = argmin::solver::trustregion::CauchyPoint::new();
-    //     let tr = TrustRegion::new(cp).with_max_radius(divisor_r*DELTA).unwrap().with_radius(divisor_r*DELTA/100.0).unwrap();
-    //     let res = Executor::new(cost, tr)
-    //     .configure(|state|
-    //         state
-    //             .param(*start)
-    //             .max_iters(30)
-    //     )
-    //     // run the solver on the defined problem
-    //     .run().unwrap();
-    //     let best_res = res.state().best_cost;
-    //     if best_res < best_val {
-    //         best_val = best_res;
-    //         best_param = res.state().best_param.unwrap();
-    //     }
-    // }
-    (best_val, best_param)
+    (best_val, Vector4::from_column_slice(best_param.as_slice().unwrap()))
 }
 
 fn error_in_f<'a>(arr4: &[Vector4<Flo>], delta_mult: Flo, max_iter: usize, func: &'a (dyn Fn(Vector4<Flo>) -> Vector4<Flo> + 'a + Sync)) -> Flo {
@@ -657,7 +636,7 @@ fn solve_for<'a>(p: Vector4<Flo>, arr4: &[Vector4<Flo>], delta_mult: Flo, max_it
         point_to_find: &p,
         fun: func,
     };
-    let ret = match_to_input2(&arr4, cost, delta_mult, max_iter);
+    let ret = find_point(&arr4, cost, delta_mult, max_iter);
     ret.0
 }
 
@@ -665,25 +644,59 @@ fn divide(arr: Vector6<Flo>, divisor: Flo) -> Vector6<Flo> {
     Vector6::from_vec(vec![arr[0]/divisor, arr[1]/divisor, arr[2]/divisor, arr[3]/divisor, arr[4], arr[5]])
 }
 
+#[derive(Parser)]
+struct Cli {
+    /// The path to the file to read
+    #[arg(short, long)]
+    path: std::path::PathBuf,
+    /// The divisor r 
+    #[arg(short, long)]
+    r_divisor: Option<Flo>,
+    /// Size of chunks for max clique calculation
+    #[arg(short, long)]
+    chunk_size: Option<Nab>,
+    /// Log level: a value 0 to 4
+    #[arg(short, long)]
+    log_level: Option<Nab>,
+}
+
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let args = Cli::parse();
     let mut chunk_size: Nab = 0;
     let mut divisor_r: Flo = 1.0;
 
-    match args.len() {
-        1 => println!("Give me a file!"),
-        2 => (), //corresponds to just a filename so then we don't chunk
-        3 => chunk_size = args[2].parse::<usize>().unwrap() as Nab,
-        _ => {
-            chunk_size = args[2].parse::<usize>().unwrap() as Nab;
-            divisor_r = args[3].parse::<Flo>().unwrap();
+    if let Some(deb) = args.log_level {
+        match deb {
+            0 => TermLogger::init(LevelFilter::Trace, Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap(),
+            1 => TermLogger::init(LevelFilter::Debug, Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap(),
+            2 => TermLogger::init(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap(),
+            3 => TermLogger::init(LevelFilter::Warn, Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap(),
+            _ => TermLogger::init(LevelFilter::Error, Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap(),
         }
+        info!("Log level has been set to {deb}");
     }
-    //println!("We are choosing r to be {divisor_r}");
-    let mut now: std::time::Instant = std::time::Instant::now();
-    let file_path = &args[1];
+    else {
+        TermLogger::init(LevelFilter::Warn, Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap();
+        info!("Log level has been set to 3");
+    }
+    if let Some(chunk) = args.chunk_size {
+        chunk_size = chunk;
+    }
+    else {
+        info!("No chunk size set, so we default to no chunking.");
+    }
+    if let Some(r) = args.r_divisor {
+        divisor_r = r;
+    }
+    else {
+        info!("No divisor set, so we default to r=1.");
+    }
 
+    let now: std::time::Instant = std::time::Instant::now();
+
+    let file_path = args.path;
     let mut arr = read_file_to_mat(file_path);
+
     let mut len = arr.len();
     //array is sorted beforehand and full duplicates are already removed. If, however, the coordinates
     //are the same, but angles are different by 1 or so due to machine erros, we deduplicate them here
@@ -698,17 +711,11 @@ fn main() {
             k +=1;
         }
     }
-    //find_r(&arr);
 
-    // println!(
-    //     "Reading the file of points took {} milliseconds and we have {} many points",
-    //     elapsed_time.as_millis(),
-    //     len
-    // );
     if chunk_size > 0 {
-        //println!("We are in chunking mode with chunk size {chunk_size}");
+        info!("We are in chunking mode with chunk size {chunk_size}");
     } else {
-        //println!("We are in non-chunking mode");
+        info!("We are in non-chunking mode");
         chunk_size = len as Nab + 1;
     }
 
@@ -747,9 +754,7 @@ fn main() {
     //     }
     // }
 
-    //divisor_r = 200.0;
-    let arr_div = arr.iter().map(|a| divide(*a, divisor_r)).collect::<Vec<Vector6<Flo>>>(); 
-    
+    let arr_div = arr.iter().map(|a| divide(*a, divisor_r)).collect::<Vec<Vector6<Flo>>>();     
     let arr4 = arr_div.iter().map(coords).collect::<Vec<Vector4<Flo>>>();
 
     let max_clique = chunk_clique(
@@ -761,9 +766,16 @@ fn main() {
     );
     let vals = get_qs(max_clique, &arr_div);
     // vals.0 = vals.0.iter().map(|v| v/divisor_r).collect();
-    println!("{}", vals.0[0]*divisor_r);
+    //println!("{}", vals.0[0]*divisor_r);
     let func = define_f(&vals.0, &vals.1);
-    println!("{}", func(vals.0[0])*divisor_r);
+    //println!("{}", func(vals.0[0])*divisor_r);
+    let p_find = arr4[100];
+    let cost = FuncMin {
+        point_to_find: &p_find,
+        fun: &func,
+    };
+    let res = find_point(&arr4, cost, 10.0, 10);
+    warn!("We started at {:?} and found the point {:?}", p_find, res);
 
     //let point_to_find = coords(&arr[21]);//8
 

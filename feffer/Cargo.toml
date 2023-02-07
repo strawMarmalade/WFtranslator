@@ -20,3 +20,6 @@ argmin-math = { version = "0.3.0", features = ["nalgebra_latest-serde", "ndarray
 #nshare = "0.9.0"
 finitediff = { version = "0.1.4", features = ["ndarray"] }
 #plotters = "0.3"
+log = "0.4.17"
+simplelog = "0.12.0"
+clap = {version = "4.1.4", features = ["derive"]}
