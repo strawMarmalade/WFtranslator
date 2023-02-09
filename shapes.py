@@ -581,6 +581,52 @@ def dim3getSinoWFFromList(WFList, N=201):
             SinoWF.append(np.array([boundaryindexminus,incomingindexminus,SinoWFindexminus]))
     return np.array(SinoWF)
 
+def dim3getSinoWFFromListAsGrid(WFList, N=201):
+    SinoWF = np.zeros((N+1, 180, 180),dtype=bool)
+    for val in WFList:
+        pointGrid = val[0]
+        angles = [ang%180 for ang in val[1]]
+        rowindex = pointGrid[0]
+        colindex = pointGrid[1]
+        radius = math.sqrt((2*rowindex/(N-1) -1)**2 + (2*colindex/(N-1) - 1)**2)
+        #computes the distance of the pixel from the origin
+        if radius ==0:
+            positionangle = 0
+        else:
+            #print((2 * colindex / (N - 1) - 1) / radius)
+            #print(math.acos((2 * colindex / (N - 1) - 1) / radius))
+            positionangle = np.sign((2*rowindex/(N-1) -1))*math.acos((2 * colindex / (N - 1) - 1) / radius)
+            if np.sign((2*rowindex/(N-1) -1))== 0:
+                positionangle = math.acos((2 * colindex / (N - 1) - 1) / radius)
+        for WFangleindex in angles:
+            #print(positionangle)
+            #positionangle is the angle of the position measured in Radians. It takes the range between -pi to pi
+            WFangleradian = math.radians(WFangleindex)
+            #turns WFangle from entry index to radians
+            boundaryradplus = canonicalplus1(radius, positionangle, WFangleradian)
+            #above function returns location on the boundary of circle in radians.
+            # So the range is a float between 0 and 2pi
+            boundarydegreeplus = math.degrees(boundaryradplus)
+            boundaryindexplus = round(boundarydegreeplus *N/360)%N
+            boundaryradminus = canonicalminus1(radius, positionangle, WFangleradian)
+            boundarydegreeminus = math.degrees(boundaryradminus)
+            boundaryindexminus = round(boundarydegreeminus *N/360)%N
+            incomingradplus = canonicalplus2(radius, positionangle, WFangleradian)
+            #above function returns incoming direction in radians relative to the inward pointing normal
+            #so the range is an integer between -pi/2 degrees to pi/2 degrees
+            incomingdegreeplus = math.degrees(incomingradplus)
+            incomingradminus = - incomingradplus
+            incomingdegreeminus = -incomingdegreeplus
+            incomingindexplus = round(incomingdegreeplus + 90)%180
+            incomingindexminus = round(incomingdegreeminus + 90)%180
+            tplus = traveltimeplus(radius, positionangle, WFangleradian)
+            tminus = traveltimeminus(radius, positionangle, WFangleradian)
+            SinoWFindexplus = pullback(boundaryradplus, incomingradplus, WFangleradian, tplus)%180
+            SinoWFindexminus = pullback(boundaryradminus, incomingradminus, WFangleradian, tminus)%180
+            SinoWF[boundaryindexplus,incomingindexplus,SinoWFindexplus] = True
+            SinoWF[boundaryindexminus,incomingindexminus,SinoWFindexminus]  = True
+    return SinoWF
+
 def dim4WFList(WFList):
     WF = []
     for val in WFList:
@@ -609,6 +655,35 @@ def dim3WFList(WFList):
             WF.append(np.array([x,y,angle+180]))
     return np.array(WF)
 
+def dim3WFListGridNoDouble(WFList, N=201):
+    WF = np.zeros((202,202,180), dtype=bool)
+    for val in WFList:
+        pointGrid = val[0]
+        x = pointGrid[0]
+        y = pointGrid[1]
+        angles = [ang%180 for ang in val[1]]
+        for angle in angles:
+            WF[x,y,angle] = True
+    return WF
+
+def genData(amount, N=201):
+    WFDataSinos = []
+    WFData = []
+    for counter in range(amount):
+        print(counter)
+        # if counter > amount//2:
+        #     randSize = np.random.randint(2, 4)
+        #     shape = generatePolygon(randSize)
+        #     WFSetList = polygonToWFsetList(shape, gridSize=N, angleAccuracy=360)
+        # else:
+        shape = genEll()
+        WFSetList = ellipseToWFsetList(shape, gridSize=N, angleAccuracy=360)
+        WF = dim3WFListGridNoDouble(WFSetList, N=N)
+        SinoWF = dim3getSinoWFFromListAsGrid(WFSetList, N=N)
+        #arr = [np.array([SinoWF[j][0], SinoWF[j][1], WF[j][0], WF[j][1], SinoWF[j][2], WF[j][2]]) for j in range(len(WF))]
+        WFData.append(WF)
+        WFDataSinos.append(SinoWF)
+    return (WFDataSinos,WFData)
 
 def WFListToPairOfPics(WFSetList, N=201):
     WFSetGrid = torch.tensor(convertWFListToWFGridLeoConvention(WFSetList, gridSize=N, angleAccuracy=360))
@@ -641,13 +716,13 @@ def generateWFData(amount = 100, N=201):
         WFData.extend(arr)
     return np.array(WFData)
 
-seed = 68
-np.random.seed(seed)
+# seed = 68
+# np.random.seed(seed)
 
-amount = 18
+# amount = 18
 
-data = generateWFData(amount=amount)
-np.savetxt(f"nHeu{amount}_{seed}.txt", data, delimiter=' ', newline='\n', fmt='%d')
+# data = generateWFData(amount=amount)
+# np.savetxt(f"nHeu{amount}_{seed}.txt", data, delimiter=' ', newline='\n', fmt='%d')
 # edgs = []
 
 
