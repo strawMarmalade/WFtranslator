@@ -582,7 +582,7 @@ def dim3getSinoWFFromList(WFList, N=201):
     return np.array(SinoWF)
 
 def dim3getSinoWFFromListAsGrid(WFList, N=201):
-    SinoWF = np.zeros((N+1, 180, 180),dtype=bool)
+    SinoWF = np.zeros((N+1, 180, 180), dtype=torch.float16)
     for val in WFList:
         pointGrid = val[0]
         angles = [ang%180 for ang in val[1]]
@@ -623,8 +623,8 @@ def dim3getSinoWFFromListAsGrid(WFList, N=201):
             tminus = traveltimeminus(radius, positionangle, WFangleradian)
             SinoWFindexplus = pullback(boundaryradplus, incomingradplus, WFangleradian, tplus)%180
             SinoWFindexminus = pullback(boundaryradminus, incomingradminus, WFangleradian, tminus)%180
-            SinoWF[boundaryindexplus,incomingindexplus,SinoWFindexplus] = True
-            SinoWF[boundaryindexminus,incomingindexminus,SinoWFindexminus]  = True
+            SinoWF[boundaryindexplus,incomingindexplus,SinoWFindexplus] = 1
+            SinoWF[boundaryindexminus,incomingindexminus,SinoWFindexminus]  = 1
     return SinoWF
 
 def dim4WFList(WFList):

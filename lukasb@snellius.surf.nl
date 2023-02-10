@@ -9,7 +9,7 @@
      "name": "stderr",
      "output_type": "stream",
      "text": [
-      "/tmp/ipykernel_30476/3982182672.py:12: DeprecationWarning: `set_matplotlib_formats` is deprecated since IPython 7.23, directly use `matplotlib_inline.backend_inline.set_matplotlib_formats()`\n",
+      "/tmp/ipykernel_8863/3982182672.py:12: DeprecationWarning: `set_matplotlib_formats` is deprecated since IPython 7.23, directly use `matplotlib_inline.backend_inline.set_matplotlib_formats()`\n",
       "  set_matplotlib_formats('svg', 'pdf') # For export\n",
       "/home/leo/miniconda3/lib/python3.10/site-packages/torchvision/io/image.py:13: UserWarning: Failed to load image Python extension: /home/leo/miniconda3/lib/python3.10/site-packages/torchvision/image.so: undefined symbol: _ZN5torch3jit17parseSchemaOrNameERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE\n",
       "  warn(f\"Failed to load image Python extension: {e}\")\n"
@@ -83,7 +83,7 @@
     "def genData(amount, N=201):\n",
     "    WFDataSinos = []\n",
     "    WFData = []\n",
-    "    for _ in range(amount):\n",
+    "    for counter in range(amount):\n",
     "        #print(counter)\n",
     "        # if counter > amount//2:\n",
     "        #     randSize = np.random.randint(2, 4)\n",
@@ -101,7 +101,7 @@
     "    return (WFDataSinos,WFData)\n",
     "\n",
     "def dim3WFListGridNoDouble(WFList, N=201):\n",
-    "    WF = np.zeros((N+1,N+1,180), dtype=torch.float16)\n",
+    "    WF = np.zeros((N+1,N+1,180),dtype=\"float32\")#change this back to float32s\n",
     "    for val in WFList:\n",
     "        pointGrid = val[0]\n",
     "        x = pointGrid[0]\n",
@@ -147,13 +147,14 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 5,
+   "execution_count": 4,
    "metadata": {},
    "outputs": [],
    "source": [
     "set_seed(43)\n",
     "train_dataset = WFDataset(100)\n",
     "val_dataset = WFDataset(100)\n",
+    "test_set = WFDataset(10)\n",
     "\n",
     "set_seed(42)\n",
     "train_set, _ = torch.utils.data.random_split(train_dataset, [90, 10])\n",
@@ -163,7 +164,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 6,
+   "execution_count": 5,
    "metadata": {},
    "outputs": [
     {
@@ -172,7 +173,7 @@
        "torch.Size([6544800])"
       ]
      },
-     "execution_count": 6,
+     "execution_count": 5,
      "metadata": {},
      "output_type": "execute_result"
     }
@@ -183,17 +184,18 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 7,
+   "execution_count": 6,
    "metadata": {},
    "outputs": [],
    "source": [
     "train_loader = data.DataLoader(train_set, batch_size=8, shuffle=True, drop_last=True, pin_memory=True, num_workers=4)\n",
-    "val_loader = data.DataLoader(val_set, batch_size=8, shuffle=False, drop_last=False, num_workers=4)"
+    "val_loader = data.DataLoader(val_set, batch_size=8, shuffle=False, drop_last=False, num_workers=4)\n",
+    "test_loader = data.DataLoader(test_set, batch_size=8, shuffle=False, drop_last=False, num_workers=4)"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 8,
+   "execution_count": 7,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -229,11 +231,10 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 4,
+   "execution_count": 8,
    "metadata": {},
    "outputs": [],
    "source": [
-    "\n",
     "class SimpleClassifier(nn.Module):\n",
     "\n",
     "    def __init__(self, num_inputs, num_hidden, num_outputs):\n",
@@ -253,19 +254,19 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 39,
+   "execution_count": 9,
    "metadata": {},
    "outputs": [],
    "source": [
     "model = SimpleClassifier(num_inputs=202*180*180, num_hidden=100, num_outputs=202*202*180)\n",
-    "model.to(device, memory_format=torch.channels_last)\n",
+    "model.to(device)\n",
     "loss_module = nn.BCEWithLogitsLoss()\n",
     "optimizer = torch.optim.SGD(model.parameters(), lr=0.1)"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 40,
+   "execution_count": 10,
    "metadata": {},
    "outputs": [
     {
@@ -286,29 +287,13 @@
    "metadata": {},
    "outputs": [],
    "source": [
-    "# state_dict = model.state_dict()\n",
-    "# torch.save(state_dict, \"our_model.tar\")"
+    "state_dict = model.state_dict()\n",
+    "torch.save(state_dict, \"our_model.tar\")"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 5,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# Load state dict from the disk (make sure it is the same name as above)\n",
-    "state_dict = torch.load(\"trained_model.tar\",map_location=torch.device('cpu'))\n",
-    "\n",
-    "# Create a new model and load the state\n",
-    "new_model = SimpleClassifier(num_inputs=202*180*180, num_hidden=100, num_outputs=202*202*180)\n",
-    "new_model.load_state_dict(state_dict)\n",
-    "test_set = WFDataset(10)\n",
-    "test_loader = data.DataLoader(test_set, batch_size=8, shuffle=False, drop_last=False, num_workers=4)"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 6,
+   "execution_count": 29,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -335,19 +320,19 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 7,
+   "execution_count": 30,
    "metadata": {},
    "outputs": [
     {
      "name": "stdout",
      "output_type": "stream",
      "text": [
-      "Accuracy of the model: 50.00%\n"
+      "Accuracy of the model: 249.98%\n"
      ]
     }
    ],
    "source": [
-    "eval_model(new_model, test_loader)"
+    "eval_model(model, test_loader)"
    ]
   },
   {
