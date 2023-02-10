@@ -135,7 +135,7 @@ def train_model(model, optimizer, data_loader, loss_module, num_epochs=100):
     # Training loop
     for epoch in tqdm(range(num_epochs)):
         for data_inputs, data_labels in data_loader:
-            with torch.cuda.amp.autocast(enabled=use_amp, device_type='cuda', dtype=torch.float16):
+            with torch.cuda.amp.autocast(enabled=use_amp, dtype=torch.float16):
                 ## Step 1: Move input data to device (only strictly necessary if we use GPU)
                 data_inputs = data_inputs.to(device)
                 data_labels = data_labels.to(device)
