@@ -112,12 +112,12 @@ class WFDataset(data.Dataset):
         return data_point, data_label
 
 set_seed(43)
-train_dataset = WFDataset(10000)
+train_dataset = WFDataset(1000)
 #val_dataset = WFDataset(100)
 #test_set = WFDataset(10)
 
 set_seed(42)
-train_set, _ = torch.utils.data.random_split(train_dataset, [9000, 1000])
+train_set, _ = torch.utils.data.random_split(train_dataset, [900, 100])
 # set_seed(42)
 # _, val_set = torch.utils.data.random_split(val_dataset, [90, 10])
 
@@ -173,7 +173,7 @@ class SimpleClassifier(nn.Module):
         x = self.linear2(x)
         return x
 
-model = SimpleClassifier(num_inputs=202*180*180, num_hidden=400, num_outputs=202*202*180)
+model = SimpleClassifier(num_inputs=202*180*180, num_hidden=200, num_outputs=202*202*180)
 model.to(device, memory_format=torch.channels_last)
 loss_module = nn.BCEWithLogitsLoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
@@ -203,6 +203,6 @@ def eval_model(model, data_loader):
     acc = true_preds / num_preds
     print(f"Accuracy of the model: {100.0*acc:4.2f}%")
 
-test_set = WFDataset(1000)
+test_set = WFDataset(100)
 test_loader = data.DataLoader(test_set, batch_size=4, shuffle=False, drop_last=False, num_workers=4)
 eval_model(model, test_loader)
