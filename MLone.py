@@ -2,8 +2,8 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] ="0"
 import numpy as np
 import random
-from PIL import Image
-from types import SimpleNamespace
+# from PIL import Image
+# from types import SimpleNamespace
 from tqdm import tqdm
 ## Imports for plotting
 # import matplotlib.pyplot as plt
@@ -22,8 +22,8 @@ import torch.nn as nn
 import torch.utils.data as data
 import torch.optim as optim
 # Torchvision
-import torchvision
-from torchvision import transforms
+# import torchvision
+# from torchvision import transforms
 
 # # Path to the folder where the datasets are/should be downloaded (e.g. CIFAR10)
 # DATASET_PATH = "../data"
@@ -112,18 +112,18 @@ class WFDataset(data.Dataset):
         return data_point, data_label
 
 set_seed(43)
-train_dataset = WFDataset(100)
-val_dataset = WFDataset(100)
-test_set = WFDataset(10)
+train_dataset = WFDataset(10000)
+#val_dataset = WFDataset(100)
+#test_set = WFDataset(10)
 
 set_seed(42)
-train_set, _ = torch.utils.data.random_split(train_dataset, [90, 10])
-set_seed(42)
-_, val_set = torch.utils.data.random_split(val_dataset, [90, 10])
+train_set, _ = torch.utils.data.random_split(train_dataset, [9000, 1000])
+# set_seed(42)
+# _, val_set = torch.utils.data.random_split(val_dataset, [90, 10])
 
-train_loader = data.DataLoader(train_set, batch_size=4, shuffle=True, drop_last=True, pin_memory=True, num_workers=4)
-val_loader = data.DataLoader(val_set, batch_size=4, shuffle=False, drop_last=False, num_workers=4)
-test_loader = data.DataLoader(test_set, batch_size=4, shuffle=False, drop_last=False, num_workers=4)
+train_loader = data.DataLoader(train_set, batch_size=8, shuffle=True, drop_last=True, pin_memory=True, num_workers=4)
+# val_loader = data.DataLoader(val_set, batch_size=4, shuffle=False, drop_last=False, num_workers=4)
+# test_loader = data.DataLoader(test_set, batch_size=4, shuffle=False, drop_last=False, num_workers=4)
 
 
 use_amp = True
@@ -173,7 +173,7 @@ class SimpleClassifier(nn.Module):
         x = self.linear2(x)
         return x
 
-model = SimpleClassifier(num_inputs=202*180*180, num_hidden=100, num_outputs=202*202*180)
+model = SimpleClassifier(num_inputs=202*180*180, num_hidden=400, num_outputs=202*202*180)
 model.to(device, memory_format=torch.channels_last)
 loss_module = nn.BCEWithLogitsLoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
@@ -181,7 +181,7 @@ print("starting training")
 train_model(model, optimizer, train_loader, loss_module)
 
 state_dict = model.state_dict()
-torch.save(state_dict, "/home/lukasb/our_model.tar")
+torch.save(state_dict, "/home/lukasb/model2.tar")
 
 def eval_model(model, data_loader):
     model.eval() # Set model to eval mode
@@ -203,4 +203,6 @@ def eval_model(model, data_loader):
     acc = true_preds / num_preds
     print(f"Accuracy of the model: {100.0*acc:4.2f}%")
 
+test_set = WFDataset(1000)
+test_loader = data.DataLoader(test_set, batch_size=4, shuffle=False, drop_last=False, num_workers=4)
 eval_model(model, test_loader)
