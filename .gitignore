@@ -12,3 +12,5 @@ Full*.txt
 __pycache__
 feffer/images
 *_model.tar
+old
+.vscode

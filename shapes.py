@@ -729,12 +729,12 @@ def generateWFData(amount = 100, N=201):
         WFData.extend(arr)
     return np.array(WFData)
 
-seed = 52
-np.random.seed(seed)
+# seed = 52
+# np.random.seed(seed)
 
-amount = 100
+# amount = 100
 
-data = generateWFData(amount=amount)
+# data = generateWFData(amount=amount)
 # np.savetxt(f"nHeu{amount}_{seed}.txt", data, delimiter=' ', newline='\n', fmt='%d')
 # edgs = []
 
