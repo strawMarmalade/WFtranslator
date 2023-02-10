@@ -68,7 +68,7 @@ def genData(amount, N=201):
     return (WFDataSinos,WFData)
 
 def dim3WFListGridNoDouble(WFList, N=201):
-    WF = np.zeros((N+1,N+1,180),dtype="float16")#change this back to float32s
+    WF = np.zeros((N+1,N+1,180),dtype="float32")#change this back to float32s
     for val in WFList:
         pointGrid = val[0]
         x = pointGrid[0]

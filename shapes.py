@@ -595,7 +595,7 @@ def dim3getSinoWFFromList(WFList, N=201):
     return np.array(SinoWF)
 
 def dim3getSinoWFFromListAsGrid(WFList, N=201):
-    SinoWF = np.zeros((N+1, 180, 180), dtype="float16")
+    SinoWF = np.zeros((N+1, 180, 180), dtype="float32")
     for val in WFList:
         pointGrid = val[0]
         angles = [ang%180 for ang in val[1]]
