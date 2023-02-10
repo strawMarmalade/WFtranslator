@@ -6,7 +6,9 @@ feffer/matrix*
 feffer/max-clique
 feffer/dataMat*
 *Heu*.txt
+points
 Full*.txt
 .ipynb_checkpoints
 __pycache__
 feffer/images
+*_model.tar

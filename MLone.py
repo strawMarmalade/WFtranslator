@@ -1,4 +1,5 @@
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] ="0"
 import numpy as np
 import random
 from PIL import Image
@@ -67,7 +68,7 @@ def genData(amount, N=201):
     return (WFDataSinos,WFData)
 
 def dim3WFListGridNoDouble(WFList, N=201):
-    WF = np.zeros((N+1,N+1,180),dtype="float32")#change this back to float32s
+    WF = np.zeros((N+1,N+1,180),dtype=torch.float16)#change this back to float32s
     for val in WFList:
         pointGrid = val[0]
         x = pointGrid[0]
@@ -134,7 +135,7 @@ def train_model(model, optimizer, data_loader, loss_module, num_epochs=100):
     # Training loop
     for epoch in tqdm(range(num_epochs)):
         for data_inputs, data_labels in data_loader:
-            with torch.cuda.amp.autocast(enabled=use_amp):
+            with torch.cuda.amp.autocast(enabled=use_amp, device_type='cuda', dtype=torch.float16):
                 ## Step 1: Move input data to device (only strictly necessary if we use GPU)
                 data_inputs = data_inputs.to(device)
                 data_labels = data_labels.to(device)

@@ -374,9 +374,22 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     print(f"Drawing the grid of ellipse took {toc - tic:0.4f} seconds\n")
 
 def canonicalplus1(r, alpha, phi):
-    return (math.acos(r*math.cos(alpha - phi)) + phi)
+    #sometimes there are apparently large enough errors accumulating that it gets outside of -1,1 range,so just get rid of those cases
+    val = r*math.cos(alpha - phi)
+    if val >= 1:
+        return phi
+    elif val <= -1:
+        print("yes")
+        return np.pi + phi
+    return (math.acos(val) + phi)
 def canonicalminus1(r, alpha, phi):
-    return (-math.acos(r*math.cos(alpha - phi)) + phi)
+    val = r*math.cos(alpha - phi)
+    if val >= 1:
+        return phi
+    elif val <= -1:
+        return -np.pi + phi
+    return (-math.acos(val) + phi)
+    #return (-math.acos(r*math.cos(alpha - phi)) + phi)
 def canonicalplus2(r, alpha, phi):
     return -math.asin(r*math.cos(alpha-phi)/2)
 def canonicalminus2(r, alpha, phi):
@@ -716,12 +729,12 @@ def generateWFData(amount = 100, N=201):
         WFData.extend(arr)
     return np.array(WFData)
 
-# seed = 68
-# np.random.seed(seed)
+seed = 52
+np.random.seed(seed)
 
-# amount = 18
+amount = 100
 
-# data = generateWFData(amount=amount)
+data = generateWFData(amount=amount)
 # np.savetxt(f"nHeu{amount}_{seed}.txt", data, delimiter=' ', newline='\n', fmt='%d')
 # edgs = []
 
