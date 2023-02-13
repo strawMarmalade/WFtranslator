@@ -72,7 +72,6 @@ def plotUnitCircle():
     
     plt.plot(circ[0,:], circ[1,:])
 
-
 def gridEll(ell, gridSize=200):
     fig = plt.figure(figsize=(1,1), dpi=gridSize, frameon=False)
     ax = fig.add_axes([0,0,1,1])
@@ -207,16 +206,31 @@ def ellipseToWFsetList(ell,gridSize=200, angleAccuracy=360, altMethod=False):
     # #arctan2 can handle when one of the parameters is infinity
     # #but I dont want to have to see the warnings so I supress them
 
+def checkIfPointInTriangle(p,xs):
+    a = 1/2 * (-xs[1,1] * xs[2,0] + xs[0,1] * (-xs[1,0] + xs[2,0]) + xs[0,0] * (xs[1,1] - xs[2,1]) + xs[1,0] * xs[2,1])
+    s = (xs[0,1]*xs[2,0] - xs[0,0]*xs[2,1] + (xs[2,1] - xs[0,1])*p[0] + (xs[0,0] - xs[2,0])*p[1])
+    t = (xs[0,0]*xs[1,1] - xs[0,1]*xs[1,0] + (xs[0,1] - xs[1,1])*p[0] + (xs[1,0] - xs[0,0])*p[1])
+
+    return s > 0 and t > 0 and (s + t) < 2 * a
+
+def checkIfPointIsInPolygon(p, poly):
+    #as the first and last element in the list poly is the same starting point, we leave it away
+    for index in range(1,len(poly)-2):
+        xs = np.array([poly[0],poly[index],poly[index+1],poly[0]])
+        if np.min(xs[:,0]) <= p[0] <= np.max(xs[:,0]) and np.min(xs[:,1]) <= p[1] <= np.max(xs[:,1]):
+        #the only polgons we can construct are star-convex so we just have to check for
+        #all the triangles that make up the polygon
+            if checkIfPointInTriangle(p, xs):
+                return True
+    return False
 
 def polygonToWFsetList(poly, gridSize=200, angleAccuracy=360):
     WFSetList = []
     #as the last element of the polygon is the first element, we look at the second last element
     #and take the edge from there to the first vertex
-    #towardPointLineMid = 0.5*poly[0]-0.5*poly[-2]
     for val in range(len(poly)-1):
         awayPointLineMid = 0.5*poly[val+1]-0.5*poly[val]
         #arctan2 gives angle between -pi and pi 
-        #towardAngle = np.arctan2(towardPointLineMid[1],towardPointLineMid[0])
         awayAngle = np.arctan2(awayPointLineMid[1],awayPointLineMid[0])
         outwardNormalAwayAngle = awayAngle-np.pi/2
         
@@ -224,30 +238,15 @@ def polygonToWFsetList(poly, gridSize=200, angleAccuracy=360):
         
         #this adds the wavefront outward angle to each intermediate point between
         #the two vertices
-        #distBetweenPoints = np.linalg.norm(poly[val]-poly[val+1])
         interPoints = np.round((gridSize-1)/2*np.linalg.norm(poly[val]-poly[val+1])).astype(int)
-        #interPoints = interPoints.astype(int)
         
         #the following list will be filled with every angle between the two outward pointing
         #angles from above which is the set of outward wavefront directions for a corner point
         #of a polygon     
         WFSetList.extend([[point2grid(poly[val]+k/interPoints*(poly[val+1]-poly[val]), gridSize=gridSize),[outwardWFEndAngle]] for k in range(interPoints+1)])
-        
         pointAsGrid = point2grid(poly[val],gridSize=gridSize)
-        
         WFSetList.append([pointAsGrid,list(range(0,angleAccuracy))])
-        
-        # towardAngleBackward = (angleAccuracy//2+rad2ang(towardAngle,angleAccuracy))%angleAccuracy
-        # awayAngleDegrees = rad2ang(awayAngle,angleAccuracy)
-        # if towardAngleBackward <= awayAngleDegrees:
-        #     WFSetList.append([pointAsGrid,list(range(towardAngleBackward,awayAngleDegrees+1))])
-        # else:
-        #     vals1 = list(range(towardAngleBackward,angleAccuracy))
-        #     vals1.extend(list(range(awayAngleDegrees+1)))
-        #     WFSetList.append([pointAsGrid,vals1])
 
-        #when going to next point the one away line will turn into the toward line for the next point
-        #towardPointLineMid = awayPointLineMid
     return WFSetList
 
 def drawEllipseBoundary(ell, output=True):
@@ -307,24 +306,6 @@ def convertWFListToWFGridLeoConvention(List, gridSize=200, angleAccuracy=360):
         angleListHalf = [ang%LeoAngleAcc for ang in val[1]]
         WFSetGrid[point[0],point[1], angleListHalf] = 1
     return WFSetGrid
-
-def checkIfPointInTriangle(p,xs):
-    a = 1/2 * (-xs[1,1] * xs[2,0] + xs[0,1] * (-xs[1,0] + xs[2,0]) + xs[0,0] * (xs[1,1] - xs[2,1]) + xs[1,0] * xs[2,1])
-    s = (xs[0,1]*xs[2,0] - xs[0,0]*xs[2,1] + (xs[2,1] - xs[0,1])*p[0] + (xs[0,0] - xs[2,0])*p[1])
-    t = (xs[0,0]*xs[1,1] - xs[0,1]*xs[1,0] + (xs[0,1] - xs[1,1])*p[0] + (xs[1,0] - xs[0,0])*p[1])
-
-    return s > 0 and t > 0 and (s + t) < 2 * a
-
-def checkIfPointIsInPolygon(p, poly):
-    #as the first and last element in the list poly is the same starting point, we leave it away
-    for index in range(1,len(poly)-2):
-        xs = np.array([poly[0],poly[index],poly[index+1],poly[0]])
-        if np.min(xs[:,0]) <= p[0] <= np.max(xs[:,0]) and np.min(xs[:,1]) <= p[1] <= np.max(xs[:,1]):
-        #the only polgons we can construct are star-convex so we just have to check for
-        #all the triangles that make up the polygon
-            if checkIfPointInTriangle(p, xs):
-                return True
-    return False
 
 def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     print(f"Polygon is of size {polySize:d} and grid size is {gridSize:d}")
@@ -427,54 +408,6 @@ def pullback(rho, theta, phi, t):
     ImageWFVect = np.array([math.cos(phi), math.sin(phi)])
     SinoWFVect = JMatrix.dot(ImageWFVect)
     return round(math.degrees(math.acos(SinoWFVect[0]/math.sqrt(SinoWFVect[0]**2 + SinoWFVect[1]**2))))
-
-
-
-def dim3getSinoWFFromList(WFList, N=201):
-    SinoWF = []
-    for val in WFList:
-        pointGrid = val[0]
-        angles = [ang%180 for ang in val[1]]
-        rowindex = pointGrid[0]
-        colindex = pointGrid[1]
-        radius = math.sqrt((2*rowindex/(N-1) -1)**2 + (2*colindex/(N-1) - 1)**2)
-        #computes the distance of the pixel from the origin
-        if radius ==0:
-            positionangle = 0
-        else:
-            #print((2 * colindex / (N - 1) - 1) / radius)
-            #print(math.acos((2 * colindex / (N - 1) - 1) / radius))
-            positionangle = np.sign((2*rowindex/(N-1) -1))*math.acos((2 * colindex / (N - 1) - 1) / radius)
-            if np.sign((2*rowindex/(N-1) -1))== 0:
-                positionangle = math.acos((2 * colindex / (N - 1) - 1) / radius)
-        for WFangleindex in angles:
-            #print(positionangle)
-            #positionangle is the angle of the position measured in Radians. It takes the range between -pi to pi
-            WFangleradian = math.radians(WFangleindex)
-            #turns WFangle from entry index to radians
-            boundaryradplus = canonicalplus1(radius, positionangle, WFangleradian)
-            #above function returns location on the boundary of circle in radians.
-            # So the range is a float between 0 and 2pi
-            boundarydegreeplus = math.degrees(boundaryradplus)
-            boundaryindexplus = round(boundarydegreeplus *N/360)%N
-            boundaryradminus = canonicalminus1(radius, positionangle, WFangleradian)
-            boundarydegreeminus = math.degrees(boundaryradminus)
-            boundaryindexminus = round(boundarydegreeminus *N/360)%N
-            incomingradplus = canonicalplus2(radius, positionangle, WFangleradian)
-            #above function returns incoming direction in radians relative to the inward pointing normal
-            #so the range is an integer between -pi/2 degrees to pi/2 degrees
-            incomingdegreeplus = math.degrees(incomingradplus)
-            incomingradminus = - incomingradplus
-            incomingdegreeminus = -incomingdegreeplus
-            incomingindexplus = round(incomingdegreeplus + 90)%180
-            incomingindexminus = round(incomingdegreeminus + 90)%180
-            tplus = traveltimeplus(radius, positionangle, WFangleradian)
-            tminus = traveltimeminus(radius, positionangle, WFangleradian)
-            SinoWFindexplus = pullback(boundaryradplus, incomingradplus, WFangleradian, tplus)%180
-            SinoWFindexminus = pullback(boundaryradminus, incomingradminus, WFangleradian, tminus)%180
-            SinoWF.append(np.array([boundaryindexplus,incomingindexplus,SinoWFindexplus]))
-            SinoWF.append(np.array([boundaryindexminus,incomingindexminus,SinoWFindexminus]))
-    return np.array(SinoWF)
 
 def dim3getSinoWFFromListAsList(WFList, N=201):
     SinoWF = np.zeros((N+1, 180, 180))
@@ -606,40 +539,22 @@ def generateWFData(amount = 100, N=201):
     WFData = []
     for counter in range(amount):
         print(counter)
-        # if counter > amount//2:
-        #     randSize = np.random.randint(2, 4)
-        #     shape = generatePolygon(randSize)
-        #     WFSetList = polygonToWFsetList(shape, gridSize=N, angleAccuracy=360)
-        # else:
-        shape = genEll()
-        WFSetList = ellipseToWFsetList(shape, gridSize=N, angleAccuracy=360)
+        if counter > amount//2:
+            randSize = np.random.randint(2, 4)
+            shape = generatePolygon(randSize)
+            WFSetList = polygonToWFsetList(shape, gridSize=N, angleAccuracy=360)
+        else:
+            shape = genEll()
+            WFSetList = ellipseToWFsetList(shape, gridSize=N, angleAccuracy=360)
         WF = dim3WFList(WFSetList)
-        SinoWF = dim3getSinoWFFromList(WFSetList, N=N)
+        SinoWF = dim3getSinoWFFromListAsList(WFSetList, N=N)
         arr = [np.array([SinoWF[j][0], SinoWF[j][1], WF[j][0], WF[j][1], SinoWF[j][2], WF[j][2]]) for j in range(len(WF))]
         WFData.extend(arr)
     return np.array(WFData)
 
 # seed = 52
 # np.random.seed(seed)
-
 # amount = 100
-
 # data = generateWFData(amount=amount)
 # np.savetxt(f"nHeu{amount}_{seed}.txt", data, delimiter=' ', newline='\n', fmt='%d')
-# edgs = []
-
-
-# edgs2 = [f"{k:d} {j:d}" if np.linalg.norm((data[k]-data[j])) >= 2 else '' for j in range(len(data)) for k in range(j)]
-
-# # for j in range(len(data)):
-# #     for k in range(j):
-# #         if np.linalg.norm((data[k]-data[j])/200) >= 1/100:
-# #             edgs.append((k,j))
-# #edgArr = np.array(edgs2)
-# np.savetxt(f"Full{amount}.txt", edgs2, newline='\n', fmt='%s')
-
-# tic = time.perf_counter()
-# feffer.submanifoldInterpolation(4, 200, data)
-# toc = time.perf_counter()
-# print(f"Submanifold find took {toc - tic:0.4f} seconds\n")
 
