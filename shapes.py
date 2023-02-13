@@ -458,13 +458,57 @@ def dim3getSinoWFFromListAsList(WFList, N=201):
                 seenVals.append((boundaryindexplus,incomingindexplus))
             if (boundaryindexminus,incomingindexminus) not in seenVals:
                 seenVals.append((boundaryindexminus,incomingindexminus))
-            # SinoWF.append(np.array([boundaryindexplus,incomingindexplus,SinoWFindexplus]))
-            # SinoWF.append(np.array([boundaryindexminus,incomingindexminus,SinoWFindexminus]))
     SinoWF2 = []
     for val in seenVals:
         indices = np.flatnonzero(SinoWF[val[0],val[1],:], )
         SinoWF2.append([np.array([val[0],val[1]]),indices])
     return SinoWF2
+
+def SinoWFFromListNoDedup(WFList, N=201):
+    SinoWF = []
+    for val in WFList:
+        pointGrid = val[0]
+        angles = [ang%180 for ang in val[1]]
+        rowindex = pointGrid[0]
+        colindex = pointGrid[1]
+        radius = math.sqrt((2*rowindex/(N-1) -1)**2 + (2*colindex/(N-1) - 1)**2)
+        #computes the distance of the pixel from the origin
+        if radius ==0:
+            positionangle = 0
+        else:
+            #print((2 * colindex / (N - 1) - 1) / radius)
+            #print(math.acos((2 * colindex / (N - 1) - 1) / radius))
+            positionangle = np.sign((2*rowindex/(N-1) -1))*math.acos((2 * colindex / (N - 1) - 1) / radius)
+            if np.sign((2*rowindex/(N-1) -1))== 0:
+                positionangle = math.acos((2 * colindex / (N - 1) - 1) / radius)
+        for WFangleindex in angles:
+            #print(positionangle)
+            #positionangle is the angle of the position measured in Radians. It takes the range between -pi to pi
+            WFangleradian = math.radians(WFangleindex)
+            #turns WFangle from entry index to radians
+            boundaryradplus = canonicalplus1(radius, positionangle, WFangleradian)
+            #above function returns location on the boundary of circle in radians.
+            # So the range is a float between 0 and 2pi
+            boundarydegreeplus = math.degrees(boundaryradplus)
+            boundaryindexplus = round(boundarydegreeplus *N/360)%N
+            boundaryradminus = canonicalminus1(radius, positionangle, WFangleradian)
+            boundarydegreeminus = math.degrees(boundaryradminus)
+            boundaryindexminus = round(boundarydegreeminus *N/360)%N
+            incomingradplus = canonicalplus2(radius, positionangle, WFangleradian)
+            #above function returns incoming direction in radians relative to the inward pointing normal
+            #so the range is an integer between -pi/2 degrees to pi/2 degrees
+            incomingdegreeplus = math.degrees(incomingradplus)
+            incomingradminus = - incomingradplus
+            incomingdegreeminus = -incomingdegreeplus
+            incomingindexplus = round(incomingdegreeplus + 90)%180
+            incomingindexminus = round(incomingdegreeminus + 90)%180
+            tplus = traveltimeplus(radius, positionangle, WFangleradian)
+            tminus = traveltimeminus(radius, positionangle, WFangleradian)
+            SinoWFindexplus = pullback(boundaryradplus, incomingradplus, WFangleradian, tplus)%180
+            SinoWFindexminus = pullback(boundaryradminus, incomingradminus, WFangleradian, tminus)%180
+            SinoWF.append(np.array([boundaryindexplus,incomingindexplus,SinoWFindexplus]))
+            SinoWF.append(np.array([boundaryindexminus,incomingindexminus,SinoWFindexminus]))
+    return np.array(SinoWF)
 
 def dim3getSinoWFFromListAsGrid(WFList, N=201):
     SinoWF = np.zeros((N+1, 180, 180), dtype="float32")
@@ -525,7 +569,7 @@ def dim3WFList(WFList):
     return np.array(WF)
 
 def dim3WFListGridNoDouble(WFList, N=201):
-    WF = np.zeros((202,202,180), dtype=bool)
+    WF = np.zeros((N+1,N+1,180), dtype=bool)
     for val in WFList:
         pointGrid = val[0]
         x = pointGrid[0]
