@@ -274,10 +274,29 @@ def drawWFSetList(WFSetList,gridSize=200, angleAccuracy=360, saveFile=True):
             angleRad = ang2rad(angle, angleAccuracy)
             vec = [0.05*np.cos(angleRad), 0.05*np.sin(angleRad)]
             plt.plot([point[0],point[0]+vec[0]],[point[1],point[1]+vec[1]],color='black',linewidth=0.3)
+            #plt.scatter([point[0]],[point[1]], color='red', s=[0.1])
     plt.xlim(-1,1)
     plt.ylim(-1,1)
     if saveFile:
-        plt.savefig('file.png',dpi=300)
+        plt.savefig('shapeWF.png',dpi=300)
+    plt.show()
+
+def drawWFSetListSino(WFSetList,gridSize=200, angleAccuracy=360, saveFile=True):
+    for val in range(len(WFSetList)):
+        pointGrid = WFSetList[val][0]
+        point = np.array([-1+2/(gridSize-1)*pointGrid[0],-1+2/(angleAccuracy/2-1)*pointGrid[1]])
+        angles = WFSetList[val][1]
+        for angle in angles:
+            #to plot the WFset we just make small lines in the correct direction
+            #at the point
+            angleRad = ang2rad(angle, angleAccuracy)
+            vec = [0.05*np.cos(angleRad), 0.05*np.sin(angleRad)]
+            plt.plot([point[0],point[0]+vec[0]],[point[1],point[1]+vec[1]],color='black',linewidth=0.3)
+            #plt.scatter([point[0]],[point[1]], color='red', s=[0.1])
+    plt.xlim(-1,1)
+    plt.ylim(-1,1)
+    if saveFile:
+        plt.savefig('sinoWF.png',dpi=300)
     plt.show()
 
 def convertWFListToWFGridLeoConvention(List, gridSize=200, angleAccuracy=360):
@@ -306,7 +325,6 @@ def checkIfPointIsInPolygon(p, poly):
             if checkIfPointInTriangle(p, xs):
                 return True
     return False
-
 
 def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     print(f"Polygon is of size {polySize:d} and grid size is {gridSize:d}")
@@ -337,6 +355,9 @@ def fullPolygonRoutineTimer(polySize=5, gridSize=200,angleAccuracy=360):
     drawGrid(grid)
     toc = time.perf_counter()
     print(f"Drawing the grid of polygon took {toc - tic:0.4f} seconds\n")
+
+    SinoWF = dim3getSinoWFFromListAsList(WFSetList)
+    drawWFSetListSino(SinoWF, gridSize=gridSize, angleAccuracy=angleAccuracy, saveFile=False)
 
 def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):   
     print(f"Grid size is {gridSize:d}")
@@ -373,13 +394,16 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     toc = time.perf_counter()
     print(f"Drawing the grid of ellipse took {toc - tic:0.4f} seconds\n")
 
+    SinoWF = dim3getSinoWFFromListAsList(WFSetList)
+    drawWFSetListSino(SinoWF, gridSize=gridSize, angleAccuracy=angleAccuracy, saveFile=False)
+
+##The following is Leo's algorithm.
 def canonicalplus1(r, alpha, phi):
     #sometimes there are apparently large enough errors accumulating that it gets outside of -1,1 range,so just get rid of those cases
     val = r*math.cos(alpha - phi)
     if val >= 1:
         return phi
     elif val <= -1:
-        print("yes")
         return np.pi + phi
     return (math.acos(val) + phi)
 def canonicalminus1(r, alpha, phi):
@@ -404,149 +428,7 @@ def pullback(rho, theta, phi, t):
     SinoWFVect = JMatrix.dot(ImageWFVect)
     return round(math.degrees(math.acos(SinoWFVect[0]/math.sqrt(SinoWFVect[0]**2 + SinoWFVect[1]**2))))
 
-def getSinoWF(ImageWF, N=201):
-    SinoWF = np.zeros([N,180,180])
-    rowindex = 0
-    while (rowindex <= N-1):
-        colindex = 0
-        while (colindex <= N-1):
-            WFangleindex = 0
-            while (WFangleindex <= 179):
-                if ImageWF[rowindex, colindex, WFangleindex] ==1:
-                   radius = math.sqrt((2*rowindex/(N-1) -1)**2 + (2*colindex/(N-1) - 1)**2)
-                   #computes the distance of the pixel from the origin
-                   if radius ==0:
-                       positionangle = 0
-                   else:
-                       #print((2 * colindex / (N - 1) - 1) / radius)
-                       #print(math.acos((2 * colindex / (N - 1) - 1) / radius))
-                       positionangle = np.sign((2*rowindex/(N-1) -1))*math.acos((2 * colindex / (N - 1) - 1) / radius)
-                       if np.sign((2*rowindex/(N-1) -1))== 0:
-                           positionangle = math.acos((2 * colindex / (N - 1) - 1) / radius)
-                       #print(positionangle)
-                   #positionangle is the angle of the position measured in Radians. It takes the range between -pi to pi
-                   WFangleradian = math.radians(WFangleindex)
-                   #turns WFangle from entry index to radians
-                   boundaryradplus = canonicalplus1(radius, positionangle, WFangleradian)
-                   #above function returns location on the boundary of circle in radians.
-                   # So the range is a float between 0 and 2pi
-                   boundarydegreeplus = math.degrees(boundaryradplus)
-                   boundaryindexplus = round(boundarydegreeplus *N/360)%N
-                   boundaryradminus = canonicalminus1(radius, positionangle, WFangleradian)
-                   boundarydegreeminus = math.degrees(boundaryradminus)
-                   boundaryindexminus = round(boundarydegreeminus *N/360)%N
-                   incomingradplus = canonicalplus2(radius, positionangle, WFangleradian)
-                   #above function returns incoming direction in radians relative to the inward pointing normal
-                   #so the range is an integer between -pi/2 degrees to pi/2 degrees
-                   incomingdegreeplus = math.degrees(incomingradplus)
-                   incomingradminus = - incomingradplus
-                   incomingdegreeminus = -incomingdegreeplus
-                   incomingindexplus = round(incomingdegreeplus + 90)%180
-                   incomingindexminus = round(incomingdegreeminus + 90)%180
-                   tplus = traveltimeplus(radius, positionangle, WFangleradian)
-                   tminus = traveltimeminus(radius, positionangle, WFangleradian)
-                   SinoWFindexplus = pullback(boundaryradplus, incomingradplus, WFangleradian, tplus)
-                   SinoWFindexminus = pullback(boundaryradminus, incomingradminus, WFangleradian, tminus)
-                   SinoWF[boundaryindexplus, incomingindexplus, SinoWFindexplus] = 1
-                   SinoWF[boundaryindexminus, incomingindexminus, SinoWFindexminus] = 1
-                WFangleindex = WFangleindex + 1
-            colindex = colindex + 1
-        rowindex = rowindex + 1
-    return torch.tensor(SinoWF)
 
-def getSinoWFFromList(WFList, N=201):
-    SinoWF = np.zeros([N,180,180])
-    for val in WFList:
-        pointGrid = val[0]
-        angles = [ang%180 for ang in val[1]]
-        rowindex = pointGrid[0]
-        colindex = pointGrid[1]
-        radius = math.sqrt((2*rowindex/(N-1) -1)**2 + (2*colindex/(N-1) - 1)**2)
-        #computes the distance of the pixel from the origin
-        if radius ==0:
-            positionangle = 0
-        else:
-            #print((2 * colindex / (N - 1) - 1) / radius)
-            #print(math.acos((2 * colindex / (N - 1) - 1) / radius))
-            positionangle = np.sign((2*rowindex/(N-1) -1))*math.acos((2 * colindex / (N - 1) - 1) / radius)
-            if np.sign((2*rowindex/(N-1) -1))== 0:
-                positionangle = math.acos((2 * colindex / (N - 1) - 1) / radius)
-        for WFangleindex in angles:
-            #print(positionangle)
-            #positionangle is the angle of the position measured in Radians. It takes the range between -pi to pi
-            WFangleradian = math.radians(WFangleindex)
-            #turns WFangle from entry index to radians
-            boundaryradplus = canonicalplus1(radius, positionangle, WFangleradian)
-            #above function returns location on the boundary of circle in radians.
-            # So the range is a float between 0 and 2pi
-            boundarydegreeplus = math.degrees(boundaryradplus)
-            boundaryindexplus = round(boundarydegreeplus *N/360)%N
-            boundaryradminus = canonicalminus1(radius, positionangle, WFangleradian)
-            boundarydegreeminus = math.degrees(boundaryradminus)
-            boundaryindexminus = round(boundarydegreeminus *N/360)%N
-            incomingradplus = canonicalplus2(radius, positionangle, WFangleradian)
-            #above function returns incoming direction in radians relative to the inward pointing normal
-            #so the range is an integer between -pi/2 degrees to pi/2 degrees
-            incomingdegreeplus = math.degrees(incomingradplus)
-            incomingradminus = - incomingradplus
-            incomingdegreeminus = -incomingdegreeplus
-            incomingindexplus = round(incomingdegreeplus + 90)%180
-            incomingindexminus = round(incomingdegreeminus + 90)%180
-            tplus = traveltimeplus(radius, positionangle, WFangleradian)
-            tminus = traveltimeminus(radius, positionangle, WFangleradian)
-            SinoWFindexplus = pullback(boundaryradplus, incomingradplus, WFangleradian, tplus)%180
-            SinoWFindexminus = pullback(boundaryradminus, incomingradminus, WFangleradian, tminus)%180
-            SinoWF[boundaryindexplus, incomingindexplus, SinoWFindexplus] = 1
-            SinoWF[boundaryindexminus, incomingindexminus, SinoWFindexminus] = 1
-    return SinoWF
-
-def dim4getSinoWFFromList(WFList, N=201):
-    SinoWF = []
-    for val in WFList:
-        pointGrid = val[0]
-        angles = [ang%180 for ang in val[1]]
-        rowindex = pointGrid[0]
-        colindex = pointGrid[1]
-        radius = math.sqrt((2*rowindex/(N-1) -1)**2 + (2*colindex/(N-1) - 1)**2)
-        #computes the distance of the pixel from the origin
-        if radius ==0:
-            positionangle = 0
-        else:
-            #print((2 * colindex / (N - 1) - 1) / radius)
-            #print(math.acos((2 * colindex / (N - 1) - 1) / radius))
-            positionangle = np.sign((2*rowindex/(N-1) -1))*math.acos((2 * colindex / (N - 1) - 1) / radius)
-            if np.sign((2*rowindex/(N-1) -1))== 0:
-                positionangle = math.acos((2 * colindex / (N - 1) - 1) / radius)
-        for WFangleindex in angles:
-            #print(positionangle)
-            #positionangle is the angle of the position measured in Radians. It takes the range between -pi to pi
-            WFangleradian = math.radians(WFangleindex)
-            #turns WFangle from entry index to radians
-            boundaryradplus = canonicalplus1(radius, positionangle, WFangleradian)
-            #above function returns location on the boundary of circle in radians.
-            # So the range is a float between 0 and 2pi
-            boundarydegreeplus = math.degrees(boundaryradplus)
-            boundaryindexplus = round(boundarydegreeplus *N/360)%N
-            boundaryradminus = canonicalminus1(radius, positionangle, WFangleradian)
-            boundarydegreeminus = math.degrees(boundaryradminus)
-            boundaryindexminus = round(boundarydegreeminus *N/360)%N
-            incomingradplus = canonicalplus2(radius, positionangle, WFangleradian)
-            #above function returns incoming direction in radians relative to the inward pointing normal
-            #so the range is an integer between -pi/2 degrees to pi/2 degrees
-            incomingdegreeplus = math.degrees(incomingradplus)
-            incomingradminus = - incomingradplus
-            incomingdegreeminus = -incomingdegreeplus
-            incomingindexplus = round(incomingdegreeplus + 90)%180
-            incomingindexminus = round(incomingdegreeminus + 90)%180
-            tplus = traveltimeplus(radius, positionangle, WFangleradian)
-            tminus = traveltimeminus(radius, positionangle, WFangleradian)
-            SinoWFindexplus = pullback(boundaryradplus, incomingradplus, WFangleradian, tplus)%180
-            SinoWFindexminus = pullback(boundaryradminus, incomingradminus, WFangleradian, tminus)%180
-            angPlus = point2grid(np.array([np.sin(np.deg2rad(SinoWFindexplus)), np.cos(np.deg2rad(SinoWFindexplus))]))
-            angMinus = point2grid(np.array([np.sin(np.deg2rad(SinoWFindexminus)), np.cos(np.deg2rad(SinoWFindexminus))]))
-            SinoWF.append(np.array([boundaryindexplus,incomingindexplus,angPlus[0],angPlus[1]]))
-            SinoWF.append(np.array([boundaryindexminus,incomingindexminus,angMinus[0],angMinus[1]]))
-    return np.array(SinoWF)
 
 def dim3getSinoWFFromList(WFList, N=201):
     SinoWF = []
@@ -594,6 +476,63 @@ def dim3getSinoWFFromList(WFList, N=201):
             SinoWF.append(np.array([boundaryindexminus,incomingindexminus,SinoWFindexminus]))
     return np.array(SinoWF)
 
+def dim3getSinoWFFromListAsList(WFList, N=201):
+    SinoWF = np.zeros((N+1, 180, 180))
+    seenVals = []
+    for val in WFList:
+        pointGrid = val[0]
+        angles = [ang%180 for ang in val[1]]
+        rowindex = pointGrid[0]
+        colindex = pointGrid[1]
+        radius = math.sqrt((2*rowindex/(N-1) -1)**2 + (2*colindex/(N-1) - 1)**2)
+        #computes the distance of the pixel from the origin
+        if radius ==0:
+            positionangle = 0
+        else:
+            #print((2 * colindex / (N - 1) - 1) / radius)
+            #print(math.acos((2 * colindex / (N - 1) - 1) / radius))
+            positionangle = np.sign((2*rowindex/(N-1) -1))*math.acos((2 * colindex / (N - 1) - 1) / radius)
+            if np.sign((2*rowindex/(N-1) -1))== 0:
+                positionangle = math.acos((2 * colindex / (N - 1) - 1) / radius)
+        for WFangleindex in angles:
+            #print(positionangle)
+            #positionangle is the angle of the position measured in Radians. It takes the range between -pi to pi
+            WFangleradian = math.radians(WFangleindex)
+            #turns WFangle from entry index to radians
+            boundaryradplus = canonicalplus1(radius, positionangle, WFangleradian)
+            #above function returns location on the boundary of circle in radians.
+            # So the range is a float between 0 and 2pi
+            boundarydegreeplus = math.degrees(boundaryradplus)
+            boundaryindexplus = round(boundarydegreeplus *N/360)%N
+            boundaryradminus = canonicalminus1(radius, positionangle, WFangleradian)
+            boundarydegreeminus = math.degrees(boundaryradminus)
+            boundaryindexminus = round(boundarydegreeminus *N/360)%N
+            incomingradplus = canonicalplus2(radius, positionangle, WFangleradian)
+            #above function returns incoming direction in radians relative to the inward pointing normal
+            #so the range is an integer between -pi/2 degrees to pi/2 degrees
+            incomingdegreeplus = math.degrees(incomingradplus)
+            incomingradminus = - incomingradplus
+            incomingdegreeminus = -incomingdegreeplus
+            incomingindexplus = round(incomingdegreeplus + 90)%180
+            incomingindexminus = round(incomingdegreeminus + 90)%180
+            tplus = traveltimeplus(radius, positionangle, WFangleradian)
+            tminus = traveltimeminus(radius, positionangle, WFangleradian)
+            SinoWFindexplus = pullback(boundaryradplus, incomingradplus, WFangleradian, tplus)%180
+            SinoWFindexminus = pullback(boundaryradminus, incomingradminus, WFangleradian, tminus)%180
+            SinoWF[boundaryindexplus,incomingindexplus,SinoWFindexplus] = 1
+            SinoWF[boundaryindexminus,incomingindexminus,SinoWFindexminus]  = 1
+            if (boundaryindexplus,incomingindexplus) not in seenVals:
+                seenVals.append((boundaryindexplus,incomingindexplus))
+            if (boundaryindexminus,incomingindexminus) not in seenVals:
+                seenVals.append((boundaryindexminus,incomingindexminus))
+            # SinoWF.append(np.array([boundaryindexplus,incomingindexplus,SinoWFindexplus]))
+            # SinoWF.append(np.array([boundaryindexminus,incomingindexminus,SinoWFindexminus]))
+    SinoWF2 = []
+    for val in seenVals:
+        indices = np.flatnonzero(SinoWF[val[0],val[1],:], )
+        SinoWF2.append([np.array([val[0],val[1]]),indices])
+    return SinoWF2
+
 def dim3getSinoWFFromListAsGrid(WFList, N=201):
     SinoWF = np.zeros((N+1, 180, 180), dtype="float32")
     for val in WFList:
@@ -640,22 +579,6 @@ def dim3getSinoWFFromListAsGrid(WFList, N=201):
             SinoWF[boundaryindexminus,incomingindexminus,SinoWFindexminus]  = 1
     return SinoWF
 
-def dim4WFList(WFList):
-    WF = []
-    for val in WFList:
-        pointGrid = val[0]
-        x = pointGrid[0]
-        y = pointGrid[1]
-        angles = [ang%180 for ang in val[1]]
-        for angle in angles:
-            ang = np.array([np.cos(np.deg2rad(angle)), np.sin(np.deg2rad(angle))])
-            p = point2grid(ang)
-            WF.append(np.array([x,y,p[0],p[1]]))
-            ang2 = np.array([np.cos(np.deg2rad(angle+180)), np.sin(np.deg2rad(angle+180))])
-            p2 = point2grid(ang2)
-            WF.append(np.array([x,y,p2[0],p2[1]]))
-    return np.array(WF)
-
 def dim3WFList(WFList):
     WF = []
     for val in WFList:
@@ -678,39 +601,6 @@ def dim3WFListGridNoDouble(WFList, N=201):
         for angle in angles:
             WF[x,y,angle] = True
     return WF
-
-def genData(amount, N=201):
-    WFDataSinos = []
-    WFData = []
-    for counter in range(amount):
-        print(counter)
-        # if counter > amount//2:
-        #     randSize = np.random.randint(2, 4)
-        #     shape = generatePolygon(randSize)
-        #     WFSetList = polygonToWFsetList(shape, gridSize=N, angleAccuracy=360)
-        # else:
-        shape = genEll()
-        WFSetList = ellipseToWFsetList(shape, gridSize=N, angleAccuracy=360)
-        WF = dim3WFListGridNoDouble(WFSetList, N=N)
-        SinoWF = dim3getSinoWFFromListAsGrid(WFSetList, N=N)
-        #arr = [np.array([SinoWF[j][0], SinoWF[j][1], WF[j][0], WF[j][1], SinoWF[j][2], WF[j][2]]) for j in range(len(WF))]
-        WFData.append(WF)
-        WFDataSinos.append(SinoWF)
-    return (WFDataSinos,WFData)
-
-def WFListToPairOfPics(WFSetList, N=201):
-    WFSetGrid = torch.tensor(convertWFListToWFGridLeoConvention(WFSetList, gridSize=N, angleAccuracy=360))
-    SinoWF = getSinoWFFromList(WFSetList, N=N)
-    return (WFSetGrid, SinoWF)
-
-def SheppLogShapeToData(shape, isPoly, N=201):
-    if isPoly:
-        WFSetList = polygonToWFsetList(shape, gridSize=N, angleAccuracy=360)
-        grid = torch.tensor(gridFromPolygon(shape, gridSize=N))
-    else:
-        WFSetList = ellipseToWFsetList(shape, gridSize=N, angleAccuracy=360)
-        grid = torch.tensor(gridEll(shape, gridSize=N))
-    return (grid, WFListToPairOfPics(WFSetList, N))
 
 def generateWFData(amount = 100, N=201):
     WFData = []
