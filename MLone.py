@@ -47,38 +47,6 @@ torch.backends.cudnn.benchmark = False
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 print("device is ", device)
 
-def genData(amount, N=201):
-    WFDataSinos = []
-    WFData = []
-    for counter in range(amount):
-        #print(counter)
-        # if counter > amount//2:
-        #     randSize = np.random.randint(2, 4)
-        #     shape = generatePolygon(randSize)
-        #     WFSetList = polygonToWFsetList(shape, gridSize=N, angleAccuracy=360)
-        # else:
-        shape = sh.genEll()
-        WFSetList = sh.ellipseToWFsetList(shape, gridSize=N, angleAccuracy=360)
-        perm = np.random.permutation(N+1)
-        WF = torch.tensor(dim3WFListGridNoDouble(WFSetList, N=N)[perm,:,:].reshape(-1)) #torch.nonzero?
-        SinoWF = torch.tensor(sh.dim3getSinoWFFromListAsGrid(WFSetList, N=N)[perm,:,:].reshape(-1))
-        #arr = [np.array([SinoWF[j][0], SinoWF[j][1], WF[j][0], WF[j][1], SinoWF[j][2], WF[j][2]]) for j in range(len(WF))]
-        WFData.append(WF)
-        WFDataSinos.append(SinoWF)
-    return (WFDataSinos,WFData)
-
-def dim3WFListGridNoDouble(WFList, N=201):
-    WF = np.zeros((N+1,N+1,180),dtype="float32")#change this back to float32s
-    for val in WFList:
-        pointGrid = val[0]
-        x = pointGrid[0]
-        y = pointGrid[1]
-        angles = [ang%180 for ang in val[1]]
-        for angle in angles:
-            WF[x,y,angle] = 1
-    return WF
-
-
 class WFDataset(data.Dataset):
 
     def __init__(self, size):
@@ -89,13 +57,13 @@ class WFDataset(data.Dataset):
         """
         super().__init__()
         self.size = size
-        self.generate_continuous_xor()
+        self.generate()
 
-    def generate_continuous_xor(self):
+    def generate(self):
         # Each data point in the XOR dataset has two variables, x and y, that can be either 0 or 1
         # The label is their XOR combination, i.e. 1 if only x or only y is 1 while the other is 0.
         # If x=y, the label is 0.
-        data, label = genData(self.size)
+        data, label = sh.genData(self.size)
 
         self.data = data
         self.label = label
@@ -181,7 +149,7 @@ print("starting training")
 train_model(model, optimizer, train_loader, loss_module)
 
 state_dict = model.state_dict()
-torch.save(state_dict, "/home/lukasb/model2.tar")
+torch.save(state_dict, "model.tar")
 
 def eval_model(model, data_loader):
     model.eval() # Set model to eval mode

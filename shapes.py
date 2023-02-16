@@ -378,7 +378,7 @@ def fullEllipseRoutineTimer(gridSize = 200, angleAccuracy=360):
     SinoWF = dim3getSinoWFFromListAsList(WFSetList)
     drawWFSetListSino(SinoWF, gridSize=gridSize, angleAccuracy=angleAccuracy, saveFile=False)
 
-##The following is Leo's algorithm.
+##The following is Leo's code. There seems to be a bit of a bug in this, see the README
 def canonicalplus1(r, alpha, phi):
     #sometimes there are apparently large enough errors accumulating that it gets outside of -1,1 range,so just get rid of those cases
     val = r*math.cos(alpha - phi)
@@ -556,27 +556,28 @@ def dim3getSinoWFFromListAsGrid(WFList, N=201):
             SinoWF[boundaryindexminus,incomingindexminus,SinoWFindexminus]  = 1
     return SinoWF
 
-def dim3WFList(WFList):
-    WF = []
-    for val in WFList:
-        pointGrid = val[0]
-        x = pointGrid[0]
-        y = pointGrid[1]
-        angles = [ang%180 for ang in val[1]]
-        for angle in angles:
-            WF.append(np.array([x,y,angle]))
-            WF.append(np.array([x,y,angle+180]))
-    return np.array(WF)
+
+
+# def dim3WFListGridNoDouble(WFList, N=201):
+#     WF = np.zeros((N+1,N+1,180), dtype=bool)
+#     for val in WFList:
+#         pointGrid = val[0]
+#         x = pointGrid[0]
+#         y = pointGrid[1]
+#         angles = [ang%180 for ang in val[1]]
+#         for angle in angles:
+#             WF[x,y,angle] = True
+#     return WF
 
 def dim3WFListGridNoDouble(WFList, N=201):
-    WF = np.zeros((N+1,N+1,180), dtype=bool)
+    WF = np.zeros((N+1,N+1,180),dtype="float32")#change this back to float32s
     for val in WFList:
         pointGrid = val[0]
         x = pointGrid[0]
         y = pointGrid[1]
         angles = [ang%180 for ang in val[1]]
         for angle in angles:
-            WF[x,y,angle] = True
+            WF[x,y,angle] = 1
     return WF
 
 def generateWFData(amount = 100, N=201):
@@ -595,6 +596,39 @@ def generateWFData(amount = 100, N=201):
         arr = [np.array([SinoWF[j][0], SinoWF[j][1], WF[j][0], WF[j][1], SinoWF[j][2], WF[j][2]]) for j in range(len(WF))]
         WFData.extend(arr)
     return np.array(WFData)
+
+def dim3WFList(WFList):
+    WF = []
+    for val in WFList:
+        pointGrid = val[0]
+        x = pointGrid[0]
+        y = pointGrid[1]
+        angles = [ang%180 for ang in val[1]]
+        for angle in angles:
+            WF.append(np.array([x,y,angle]))
+            WF.append(np.array([x,y,angle+180]))
+    return np.array(WF)
+
+def genData(amount, N=201):
+    WFDataSinos = []
+    WFData = []
+    for _ in range(amount):
+        #print(counter)
+        # if counter > amount//2:
+        #     randSize = np.random.randint(2, 4)
+        #     shape = generatePolygon(randSize)
+        #     WFSetList = polygonToWFsetList(shape, gridSize=N, angleAccuracy=360)
+        # else:
+        shape = genEll()
+        WFSetList = ellipseToWFsetList(shape, gridSize=N, angleAccuracy=360)
+        perm = np.random.permutation(N+1)
+        WF = torch.tensor(dim3WFListGridNoDouble(WFSetList, N=N)[perm,:,:].reshape(-1)) #torch.nonzero?
+        SinoWF = torch.tensor(dim3getSinoWFFromListAsGrid(WFSetList, N=N)[perm,:,:].reshape(-1))
+        #arr = [np.array([SinoWF[j][0], SinoWF[j][1], WF[j][0], WF[j][1], SinoWF[j][2], WF[j][2]]) for j in range(len(WF))]
+        WFData.append(WF)
+        WFDataSinos.append(SinoWF)
+    return (WFDataSinos,WFData)
+
 
 # seed = 52
 # np.random.seed(seed)

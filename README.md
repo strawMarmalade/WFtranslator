@@ -21,9 +21,13 @@ We generate training data here as follows:
 
 1. Generate shapes with WFset (`shapes.py`).
 2. Calculate their sinogram in some geometry (using some package that I've been told exists but I don't know it).
-3. Put the result from 2. into DeNSE to get the WFset of this sinogram. 
+3. Put the result from 2. into DeNSE to get the WFset of this sinogram.
 
 Then hopefully some ML magic will get this to work.
+
+### Trying out with straight geometry:
+
+Instead of doing the above, in the case of straight geometry, when we just want to test how well it could work, steps 2-3 are calculated analytically using the code in `shapes.py`. See `MLone.py` for a very bad first attempt at doing this. The code in `MLone.py` is copied and adapted from [UvADeepLearning](https://uvadlc-notebooks.readthedocs.io/en/latest/index.html).
 
 ## Manifold Interpolation
 
