@@ -1,4 +1,4 @@
-# Sinogram to WF of original picture
+# Sinogram to WF of original picture 
 
 We want to be able to do the following: given a 2d picture (sinogram) that comes from integrating an object along geodesics determine the wavefront set of the original object. So in some sense we're just trying to recover the geometry.
 
@@ -23,7 +23,7 @@ We generate training data here as follows:
 2. Calculate their sinogram in some geometry (using some package that I've been told exists but I don't know it).
 3. Put the result from 2. into DeNSE to get the WFset of this sinogram.
 
-Then hopefully some ML magic will get this to work.
+Then hopefully some ML magic will get this to work. 
 
 ### Trying out with straight geometry:
 
